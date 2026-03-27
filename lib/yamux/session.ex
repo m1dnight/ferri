@@ -20,12 +20,11 @@ defmodule Yamux.Session do
     field :socket, :inet.socket()
     field :mode, :client | :server
     field :buffer, binary(), default: <<>>
-    # stream_id => pid, we'll flesh this out later
     field :streams, %{non_neg_integer() => pid()}, default: %{}
-    # 1 for client, 2 for server
     field :next_stream_id, non_neg_integer()
-    # Called with the stream pid when a new stream is accepted
-    field :on_stream, (pid() -> any()) | nil, default: nil
+    # Handler behaviour module and its opaque state
+    field :handler, module() | nil, default: nil
+    field :handler_state, term(), default: nil
   end
 
   def start_link(socket, mode, opts \\ []) do
@@ -46,14 +45,23 @@ defmodule Yamux.Session do
   def init({socket, mode, opts}) do
     Logger.debug("Yamux session started")
 
-    # The next id of the stream is odd if this is a client, even if it's a
-    # server.
     next_id = if mode == :client, do: 1, else: 2
+    handler = Keyword.get(opts, :handler)
 
-    # Assign a callback to execute when a new stream is created.
-    on_stream = Keyword.get(opts, :on_stream)
+    handler_state =
+      if handler do
+        {:ok, hs} = handler.init(mode)
+        hs
+      end
 
-    {:ok, %Session{socket: socket, mode: mode, next_stream_id: next_id, on_stream: on_stream}}
+    {:ok,
+     %Session{
+       socket: socket,
+       mode: mode,
+       next_stream_id: next_id,
+       handler: handler,
+       handler_state: handler_state
+     }}
   end
 
   @impl true
@@ -79,6 +87,7 @@ defmodule Yamux.Session do
 
       {:error, :go_away, state} ->
         notify_streams(state, :session_closed)
+        invoke_handler(state, :terminate, [:go_away])
         Logger.debug("Session terminating due to go away message")
         {:stop, :normal, :go_away}
     end
@@ -86,6 +95,7 @@ defmodule Yamux.Session do
 
   def handle_info({:tcp_closed, _socket}, state) do
     notify_streams(state, :session_closed)
+    invoke_handler(state, :terminate, [:tcp_closed])
     Logger.debug("Session terminating; socket closed")
     {:stop, :normal, state}
   end
@@ -146,22 +156,38 @@ defmodule Yamux.Session do
         syn_ack = Frame.syn_ack(id)
         :ok = :gen_tcp.send(state.socket, Frame.encode(syn_ack))
 
-        # notify the callback if one was provided
-        if state.on_stream, do: state.on_stream.(pid)
-
-        {:ok, %{state | streams: Map.put(state.streams, id, pid)}}
+        state = %{state | streams: Map.put(state.streams, id, pid)}
+        state = invoke_handler(state, :new_stream, [id, pid])
+        {:ok, state}
 
       # The client sent a FIN message, meaning they want to half-close.
       Frame.fin?(flags) and Map.has_key?(state.streams, id) ->
         Logger.debug("Half-closing stream #{id}")
-        stream = Map.get(state.streams, id)
-        send(stream, :session_closed)
+        pid = Map.get(state.streams, id)
+        send(pid, {:frame, frame})
+        state = invoke_handler(state, :stream_closed, [id, pid])
+        {:ok, state}
+
+      # RST — stream abruptly reset by remote
+      Frame.rst?(flags) and Map.has_key?(state.streams, id) ->
+        pid = Map.get(state.streams, id)
+        send(pid, {:frame, frame})
+        state = invoke_handler(state, :stream_error, [id, pid])
         {:ok, state}
 
       # The frame is directed at a currently existing stream
       Map.has_key?(state.streams, id) ->
         pid = Map.get(state.streams, id)
         send(pid, {:frame, frame})
+
+        # Notify handler of data frames with body content
+        state =
+          if frame.type == 0x0 and byte_size(frame.body) > 0 do
+            invoke_handler(state, :stream_data, [id, frame.body, pid])
+          else
+            state
+          end
+
         {:ok, state}
 
       # We don't know this stream, it's data frame directed at a non-existing stream.
@@ -183,6 +209,7 @@ defmodule Yamux.Session do
       :ok
     end
 
+    state = invoke_handler(state, :ping, [frame.length])
     {:ok, state}
   end
 
@@ -193,5 +220,20 @@ defmodule Yamux.Session do
 
   defp notify_streams(state, message) do
     Enum.each(state.streams, fn {_id, pid} -> send(pid, message) end)
+  end
+
+  # Invokes a handler callback if a handler is configured. For callbacks that
+  # return {:ok, new_state}, the handler_state is updated. For :terminate,
+  # the return value is ignored.
+  defp invoke_handler(%{handler: nil} = state, _callback, _args), do: state
+
+  defp invoke_handler(state, :terminate, args) do
+    apply(state.handler, :terminate, args ++ [state.handler_state])
+    state
+  end
+
+  defp invoke_handler(state, callback, args) do
+    {:ok, new_hs} = apply(state.handler, callback, args ++ [state.handler_state])
+    %{state | handler_state: new_hs}
   end
 end

@@ -1,27 +1,47 @@
+defmodule Yamux.EchoHandler do
+  use Yamux.Handler
+
+  @impl true
+  def init(_mode), do: {:ok, %{}}
+
+  @impl true
+  def new_stream(_stream_id, stream_pid, state) do
+    spawn(fn -> echo_loop(stream_pid) end)
+    {:ok, state}
+  end
+
+  @impl true
+  def stream_data(_stream_id, _data, _stream_pid, state) do
+    {:ok, state}
+  end
+
+  @impl true
+  def stream_closed(_stream_id, _stream_pid, state) do
+    {:ok, state}
+  end
+
+  defp echo_loop(stream) do
+    case Yamux.Stream.recv(stream, 0) do
+      {:ok, data} ->
+        :ok = Yamux.Stream.send_data(stream, data)
+        echo_loop(stream)
+
+      {:error, :closed} ->
+        :closed
+    end
+  end
+end
+
 defmodule Yamux.InteropTestDocker do
   use ExUnit.Case
 
   @moduletag :interop
-  # loops on a single stream for incoming data and echo's it back.
-  defp stream_receive_loop(stream) do
-    spawn(fn ->
-      case Yamux.Stream.recv(stream, 0) do
-        {:ok, data} ->
-          :ok = Yamux.Stream.send_data(stream, data)
-          stream_receive_loop(stream)
 
-        {:error, :closed} ->
-          :closed
-      end
-    end)
-  end
-
-  # loops on the socket to accept incoming connections (i.e., sessions)
   defp accept_loop(listener) do
     case :gen_tcp.accept(listener) do
       {:ok, socket} ->
         {:ok, _session} =
-          Yamux.Session.start_link(socket, :server, on_stream: &stream_receive_loop/1)
+          Yamux.Session.start_link(socket, :server, handler: Yamux.EchoHandler)
 
         accept_loop(listener)
 
