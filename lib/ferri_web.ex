@@ -1,3 +1,4 @@
+# credo:disable-for-this-file
 defmodule FerriWeb do
   @moduledoc """
   The entrypoint for defining your web interface, such

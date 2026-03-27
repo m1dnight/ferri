@@ -1,3 +1,4 @@
+# credo:disable-for-this-file
 defmodule Ferri.DataCase do
   @moduledoc """
   This module defines the setup for tests requiring

@@ -11,7 +11,11 @@ defmodule Ferri.MixProject do
       aliases: aliases(),
       deps: deps(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
-      listeners: [Phoenix.CodeReloader]
+      listeners: [Phoenix.CodeReloader],
+      dialyzer: [
+        flags: ["-Wunmatched_returns", :error_handling, :underspecs],
+        plt_add_apps: [:ex_unit]
+      ]
     ]
   end
 
@@ -65,7 +69,11 @@ defmodule Ferri.MixProject do
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
-      {:bandit, "~> 1.5"}
+      {:bandit, "~> 1.5"},
+      {:typedstruct, "~> 0.5.4"},
+      {:stream_data, "~> 1.0", only: :test},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
     ]
   end
 
@@ -88,7 +96,14 @@ defmodule Ferri.MixProject do
         "esbuild ferri --minify",
         "phx.digest"
       ],
-      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]
+      precommit: [
+        "compile --warnings-as-errors",
+        "deps.unlock --unused",
+        "format",
+        "test",
+        "dialyzer",
+        "credo --strict"
+      ]
     ]
   end
 end

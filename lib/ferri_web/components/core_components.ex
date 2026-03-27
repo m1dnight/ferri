@@ -1,3 +1,4 @@
+# credo:disable-for-this-file
 defmodule FerriWeb.CoreComponents do
   @moduledoc """
   Provides core UI components.
