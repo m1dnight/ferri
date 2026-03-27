@@ -112,6 +112,7 @@ defmodule Yamux.Session do
   defp drain_frames(state) do
     case Frame.parse(state.buffer) do
       {:ok, frame, rest} ->
+        Logger.debug("SESSION > #{inspect(frame)}")
         state = %{state | buffer: rest}
 
         case dispatch_frame(frame, state) do
@@ -144,11 +145,13 @@ defmodule Yamux.Session do
 
   # Handles a frame that is meant to be sent to a specific stream.
   defp handle_stream_frame(%Frame{stream_id: id, flags: flags} = frame, state) do
+    IO.puts("handling frame for callback")
     # Dispatch on the stream message. This can be any of the following:
     # A new stream is initiated. This is a SYN message.
     cond do
       # New stream, and we dont know about this stream yet.
       Frame.syn?(flags) and not Map.has_key?(state.streams, id) ->
+        IO.inspect("syn frame")
         {:ok, pid} = Stream.start_link(self(), id)
         send(pid, {:frame, frame})
 
@@ -158,10 +161,20 @@ defmodule Yamux.Session do
 
         state = %{state | streams: Map.put(state.streams, id, pid)}
         state = invoke_handler(state, :new_stream, [id, pid])
+
+        # SYN frames can carry data (piggybacked first write)
+        state =
+          if frame.type == 0x0 and byte_size(frame.body) > 0 do
+            invoke_handler(state, :stream_data, [id, frame.body, pid])
+          else
+            state
+          end
+
         {:ok, state}
 
       # The client sent a FIN message, meaning they want to half-close.
       Frame.fin?(flags) and Map.has_key?(state.streams, id) ->
+        IO.inspect("fin frame")
         Logger.debug("Half-closing stream #{id}")
         pid = Map.get(state.streams, id)
         send(pid, {:frame, frame})
@@ -170,6 +183,7 @@ defmodule Yamux.Session do
 
       # RST — stream abruptly reset by remote
       Frame.rst?(flags) and Map.has_key?(state.streams, id) ->
+        IO.inspect("rst frame")
         pid = Map.get(state.streams, id)
         send(pid, {:frame, frame})
         state = invoke_handler(state, :stream_error, [id, pid])
@@ -177,14 +191,17 @@ defmodule Yamux.Session do
 
       # The frame is directed at a currently existing stream
       Map.has_key?(state.streams, id) ->
+        IO.inspect("data frame")
         pid = Map.get(state.streams, id)
         send(pid, {:frame, frame})
 
         # Notify handler of data frames with body content
         state =
           if frame.type == 0x0 and byte_size(frame.body) > 0 do
+            IO.inspect("forwarding frame to handler")
             invoke_handler(state, :stream_data, [id, frame.body, pid])
           else
+            IO.puts("not a data frame")
             state
           end
 

@@ -158,7 +158,7 @@ defmodule Yamux.Stream do
 
   @impl GenServer
   def handle_info({:frame, %Frame{} = frame}, state) do
-    Logger.debug("> #{inspect(frame)}")
+    Logger.debug("STREAM  > #{inspect(frame)}")
     {:noreply, handle_frame(frame, state)}
   end
 
@@ -331,7 +331,7 @@ defmodule Yamux.Stream do
   # sends a raw frame across the socket.
   @spec send_frame(t(), Frame.t()) :: :ok
   defp send_frame(state, frame) do
-    Logger.debug("< #{inspect(frame)}")
+    Logger.debug("STREAM  < #{inspect(frame)}")
     encoded = Frame.encode(frame)
     GenServer.cast(state.session, {:send_raw, encoded})
     Logger.debug("Frame sent")

@@ -12,8 +12,8 @@ defmodule Ferri.Application do
       Ferri.Repo,
       {DNSCluster, query: Application.get_env(:ferri, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Ferri.PubSub},
-      # Start a worker by calling: Ferri.Worker.start_link(arg)
-      # {Ferri.Worker, arg},
+      Ferri.Tunnel.Registry,
+      {Ferri.Tunnel.Listener, port: Application.get_env(:ferri, :tcp_port)},
       # Start to serve requests, typically the last entry
       FerriWeb.Endpoint
     ]
