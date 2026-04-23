@@ -17,7 +17,7 @@ defmodule Ferri.Application do
       {Ferri.Tunnel.Listener, port: Application.get_env(:ferri, :tcp_port)},
       # listens for proxied requests to clients
       {Ferri.Tunnel.HttpListener, port: Application.get_env(:ferri, :http_port)},
-      # Start to serve requests, typically the last entry
+      # # Start to serve requests, typically the last entry
       FerriWeb.Endpoint
     ]
 

@@ -72,7 +72,6 @@ defmodule Ferri.Tunnel.Handler do
   # <<length::32-big, json::binary-size(length)>>
   defp handle_control_data(data, state) do
     buffer = state.buffer <> data
-    IO.inspect(buffer, label: "buffer")
 
     drain_control_messages(buffer, state)
   end
@@ -95,7 +94,8 @@ defmodule Ferri.Tunnel.Handler do
 
   defp handle_control_message(%{"type" => "register"}, state) do
     {_control_id, control_pid} = state.control_stream
-    subdomain = Registry.generate_subdomain()
+    # subdomain = Registry.generate_subdomain()
+    subdomain = "foobar"
 
     case Registry.register(subdomain, self()) do
       :ok ->

@@ -98,6 +98,7 @@ defmodule Yamux.Stream do
 
   @impl GenServer
   def init({session, stream_id}) do
+    Logger.debug("Created Yamux stream #{inspect(self())}")
     {:ok, %Stream{session: session, stream_id: stream_id}}
   end
 
@@ -150,6 +151,7 @@ defmodule Yamux.Stream do
 
   @impl GenServer
   def handle_cast(:close, state) do
+    Logger.debug("Closing Yamux stream #{inspect(self())}")
     # Close the stream by sending a FIN frame and setting send_closed to true.
     frame = Frame.fin(state.stream_id)
     send_frame(state, frame)

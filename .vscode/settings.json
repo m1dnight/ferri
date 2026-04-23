@@ -1,0 +1,3 @@
+{
+  "rust-analyzer.linkedProjects": ["./ferri-client/ferri/Cargo.toml"]
+}

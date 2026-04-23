@@ -8,6 +8,8 @@ defmodule Ferri.Tunnel.Listener do
 
   require Logger
 
+  alias Yamux.Session
+
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
@@ -16,28 +18,46 @@ defmodule Ferri.Tunnel.Listener do
   def init(opts) do
     port = Keyword.fetch!(opts, :port)
 
-    {:ok, listener} =
-      :gen_tcp.listen(port, [:binary, active: false, reuseaddr: true])
+    # start the socket to listen for incoming web requests
+    opts = [:binary, active: false, reuseaddr: true, exit_on_close: false]
 
-    Logger.info("Tunnel listener started on port #{port}")
+    # if the socket fails to open, abort.
+    case :gen_tcp.listen(port, opts) do
+      {:ok, listen_socket} ->
+        Logger.info("Tunnel listener started on port #{port}")
 
-    {:ok, %{listener: listener}, {:continue, :accept}}
+        # accept first connection
+        send(self(), :accept)
+
+        {:ok, listen_socket}
+
+      {:error, reason} ->
+        {:stop, reason}
+    end
   end
 
   @impl true
-  def handle_continue(:accept, state) do
-    case :gen_tcp.accept(state.listener) do
+  def handle_info(:accept, listen_socket) do
+    case :gen_tcp.accept(listen_socket, 2_000) do
       {:ok, socket} ->
-        Logger.info("New tunnel client connected")
+        # grab some extra information from the socket for logging
+        {:ok, {ip, port}} = :inet.peername(socket)
+        Logger.info("Tunnel client connected #{inspect(ip)}:#{inspect(port)}")
 
-        {:ok, _session} =
-          Yamux.Session.start_link(socket, :server, handler: Ferri.Tunnel.Handler)
+        # Start a connection process for this client's connection.
+        {:ok, _session} = Session.start_link(socket, :server, handler: Ferri.Tunnel.Handler)
 
-        {:noreply, state, {:continue, :accept}}
+        # Accept next connection.
+        send(self(), :accept)
+        {:noreply, listen_socket}
 
-      {:error, :closed} ->
-        Logger.info("Tunnel listener closed")
-        {:stop, :normal, state}
+      {:error, :timeout} ->
+        send(self(), :accept)
+        {:noreply, listen_socket}
+
+      # todo: gracefully handle this case with the child Session processes.
+      {:error, reason} ->
+        {:stop, reason, listen_socket}
     end
   end
 end
