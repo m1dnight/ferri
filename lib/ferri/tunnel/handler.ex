@@ -105,12 +105,12 @@ defmodule Ferri.Tunnel.Handler do
         response =
           Jason.encode!(%{type: "registered", subdomain: subdomain, url: url})
 
-        send_control_message(control_pid, response)
+        :ok = send_control_message(control_pid, response)
         %{state | subdomain: subdomain, session_pid: self()}
 
       {:error, :taken} ->
         response = Jason.encode!(%{type: "error", reason: "subdomain_taken"})
-        send_control_message(control_pid, response)
+        :ok = send_control_message(control_pid, response)
         state
     end
   end

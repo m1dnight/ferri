@@ -67,7 +67,7 @@ defmodule Ferri.Tunnel.Registry do
 
   @impl true
   def init([]) do
-    :ets.new(@table, [:named_table, :public, :set, read_concurrency: true])
+    @table = :ets.new(@table, [:named_table, :public, :set, read_concurrency: true])
     {:ok, %{}}
   end
 

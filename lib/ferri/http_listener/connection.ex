@@ -178,7 +178,7 @@ defmodule Ferri.HttpListener.Connection do
 
   # spawns an async task that will forward all messages from the yamux stream to
   # this socket controller
-  @spec start_stream_listener(t()) :: {:ok, pid()} | {:error, term()}
+  @spec start_stream_listener(t()) :: {:ok, pid()}
   defp start_stream_listener(state) do
     this = self()
     Task.start_link(fn -> listen_to_stream(state.stream, this) end)
