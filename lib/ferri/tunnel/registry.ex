@@ -55,11 +55,7 @@ defmodule Ferri.Tunnel.Registry do
   """
   @spec generate_subdomain() :: String.t()
   def generate_subdomain do
-    subdomain =
-      :crypto.strong_rand_bytes(4)
-      |> Base.encode16(case: :lower)
-      |> binary_part(0, 6)
-
+    subdomain = HorseStapleBattery.generate_compound(:kebab_case, [:adjective, :noun])
     case :ets.lookup(@table, subdomain) do
       [] -> subdomain
       _ -> generate_subdomain()

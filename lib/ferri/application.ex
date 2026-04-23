@@ -13,7 +13,9 @@ defmodule Ferri.Application do
       {DNSCluster, query: Application.get_env(:ferri, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Ferri.PubSub},
       Ferri.Tunnel.Registry,
+      # listens for ferri client connections
       {Ferri.Tunnel.Listener, port: Application.get_env(:ferri, :tcp_port)},
+      # listens for proxied requests to clients
       {Ferri.Tunnel.HttpListener, port: Application.get_env(:ferri, :http_port)},
       # Start to serve requests, typically the last entry
       FerriWeb.Endpoint

@@ -39,3 +39,7 @@ config :phoenix_live_view,
 # Sort query params output of verified routes for robust url comparisons
 config :phoenix,
   sort_verified_routes_query_params: true
+
+# Bind listener sockets to OS-assigned ports in test so a running dev server
+# on the production ports doesn't block `mix test`.
+config :ferri, tcp_port: 0, http_port: 0

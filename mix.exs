@@ -73,7 +73,8 @@ defmodule Ferri.MixProject do
       {:typedstruct, "~> 0.5.4"},
       {:stream_data, "~> 1.0", only: :test},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:horsestaplebattery, "~> 0.1.1"}
     ]
   end
 

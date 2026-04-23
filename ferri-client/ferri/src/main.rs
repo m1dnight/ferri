@@ -54,7 +54,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expect("incomplete or missing response from server");
 
     match response {
-        ServerMessage::Registered { url, .. } => {
+        ServerMessage::Registered { subdomain, .. } => {
+            let url = if cfg!(debug_assertions) {
+                format!("http://{subdomain}.localhost:8080")
+            } else {
+                format!("https://{subdomain}.ferri.dev")
+            };
             println!("Tunnel live at {url} -> localhost:{port}");
         }
         ServerMessage::Error { reason } => {
