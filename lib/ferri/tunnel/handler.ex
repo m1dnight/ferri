@@ -74,14 +74,11 @@ defmodule Ferri.Tunnel.Handler do
     buffer = state.buffer <> data
     IO.inspect(buffer, label: "buffer")
 
-    # echo the value back
-    {stream_id, stream_pid} = state.control_stream
-    # frame = Yamux.Frame.data(stream_id, data)
-    Yamux.Stream.send_data(stream_pid, data)
-
     drain_control_messages(buffer, state)
   end
 
+  # matches if the buffer starts with a length header and enough bytes that
+  # constitute an entire json payload.
   defp drain_control_messages(
          <<length::32-big, json::binary-size(length), rest::binary>>,
          state
@@ -91,6 +88,7 @@ defmodule Ferri.Tunnel.Handler do
     drain_control_messages(rest, %{state | buffer: <<>>})
   end
 
+  # we might have a length header, but were missing the entire body
   defp drain_control_messages(remaining, state) do
     {:ok, %{state | buffer: remaining}}
   end

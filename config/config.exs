@@ -10,7 +10,8 @@ import Config
 config :ferri,
   ecto_repos: [Ferri.Repo],
   generators: [timestamp_type: :utc_datetime],
-  tcp_port: 59595
+  tcp_port: 59595,
+  http_port: 8080
 
 # Configure the endpoint
 config :ferri, FerriWeb.Endpoint,

@@ -247,6 +247,21 @@ defmodule Yamux.Frame do
     }
   end
 
+  @doc """
+  Creates a SYN frame to open a new outbound stream.
+  """
+  @spec syn(non_neg_integer()) :: Frame.t()
+  def syn(stream_id) do
+    %Frame{
+      type: @data,
+      flags: @syn,
+      stream_id: stream_id,
+      body: <<>>,
+      length: 0,
+      version: 0
+    }
+  end
+
   defimpl Inspect do
     import Inspect.Algebra
 

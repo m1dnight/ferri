@@ -27,6 +27,15 @@ defmodule Yamux.Session do
     field :handler_state, term(), default: nil
   end
 
+  @doc """
+  Opens a new outbound stream on the session, returning the stream pid.
+
+  Allocates the next stream id (odd for clients, even for servers), spawns the
+  stream process, and sends a SYN frame to the peer.
+  """
+  @spec open_stream(pid()) :: {:ok, pid()}
+  def open_stream(session), do: GenServer.call(session, :open_stream)
+
   def start_link(socket, mode, opts \\ []) do
     # First start the genserver that will manage this session.
     {:ok, pid} = GenServer.start_link(__MODULE__, {socket, mode, opts})
@@ -98,6 +107,21 @@ defmodule Yamux.Session do
     invoke_handler(state, :terminate, [:tcp_closed])
     Logger.debug("Session terminating; socket closed")
     {:stop, :normal, state}
+  end
+
+  @impl true
+  def handle_call(:open_stream, _from, state) do
+    id = state.next_stream_id
+    {:ok, stream_pid} = Stream.start_link(self(), id)
+    :ok = :gen_tcp.send(state.socket, Frame.encode(Frame.syn(id)))
+
+    state = %{
+      state
+      | streams: Map.put(state.streams, id, stream_pid),
+        next_stream_id: id + 2
+    }
+
+    {:reply, {:ok, stream_pid}, state}
   end
 
   @impl true

@@ -14,6 +14,7 @@ defmodule Ferri.Application do
       {Phoenix.PubSub, name: Ferri.PubSub},
       Ferri.Tunnel.Registry,
       {Ferri.Tunnel.Listener, port: Application.get_env(:ferri, :tcp_port)},
+      {Ferri.Tunnel.HttpListener, port: Application.get_env(:ferri, :http_port)},
       # Start to serve requests, typically the last entry
       FerriWeb.Endpoint
     ]
