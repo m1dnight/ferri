@@ -3,12 +3,14 @@ mod protocol;
 use std::env;
 use std::future::poll_fn;
 
+use anyhow::Context;
 use futures::AsyncReadExt;
 use futures::AsyncWriteExt;
 use futures::FutureExt;
 use futures::select;
 use tokio::net::TcpStream;
 use tokio_util::compat::TokioAsyncReadCompatExt;
+use yamux::Stream;
 use yamux::{Config, Connection, Mode};
 
 use protocol::{ClientMessage, ServerMessage};
@@ -27,7 +29,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut yamux_session = Connection::new(stream.compat(), Config::default(), Mode::Client);
 
     // Open the control stream (stream 1) on the yamux session.
-    let mut control_stream = poll_fn(|cx| yamux_session.poll_new_outbound(cx)).await?;
+    let control_stream = poll_fn(|cx| yamux_session.poll_new_outbound(cx)).await?;
 
     // Poll for new incoming streams. Each new incoming stream is a request sent
     // over from the Ferri server and represents an HTTP client.
@@ -51,7 +53,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    // Send REGISTER to Ferri to obtain a new DNS
+    // Try and register a new subdomain
+    let subdomain = register(control_stream).await?;
+    let url = format_url(subdomain);
+    println!("Tunnel live at {url} -> localhost:{port}");
+
+    // Keep the connection alive
+    futures::future::pending::<()>().await;
+
+    Ok(())
+}
+
+/// Formats the session name into the full URL.
+/// In debugging this is localhost, otherwise ferri.
+fn format_url(subdomain: String) -> String {
+    if cfg!(debug_assertions) {
+        format!("http://{subdomain}.localhost:8080")
+    } else {
+        format!("https://{subdomain}.ferri.dev")
+    }
+}
+
+// Send REGISTER to Ferri to obtain a new DNS
+async fn register(mut control_stream: Stream) -> anyhow::Result<String> {
+    // Create REGISTER payload
     let frame = protocol::encode(&ClientMessage::Register);
     control_stream.write_all(&frame).await?;
 
@@ -59,27 +84,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut buf = vec![0u8; 1024];
     let n = control_stream.read(&mut buf).await?;
     let (response, _) =
-        protocol::decode(&buf[..n]).expect("incomplete or missing response from server");
+        protocol::decode(&buf[..n]).context("incomplete or missing response from server")?;
 
     match response {
-        ServerMessage::Registered { subdomain, .. } => {
-            let url = if cfg!(debug_assertions) {
-                format!("http://{subdomain}.localhost:8080")
-            } else {
-                format!("https://{subdomain}.ferri.dev")
-            };
-            println!("Tunnel live at {url} -> localhost:{port}");
-        }
-        ServerMessage::Error { reason } => {
-            eprintln!("Registration failed: {reason}");
-            std::process::exit(1);
-        }
+        ServerMessage::Error { reason } => Err(anyhow::anyhow!("registration failed: {reason}")),
+        ServerMessage::Registered { subdomain, .. } => Ok(subdomain),
     }
-
-    // Keep the connection alive
-    futures::future::pending::<()>().await;
-
-    Ok(())
 }
 
 /// Proxy a single yamux stream (one visitor request) to the local port.
