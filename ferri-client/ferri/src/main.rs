@@ -2,17 +2,15 @@ mod protocol;
 
 use std::env;
 use std::future::poll_fn;
+use std::time::Instant;
 
 use anyhow::Context;
-use futures::AsyncReadExt;
-use futures::AsyncWriteExt;
-use tokio::io::AsyncWriteExt;
-use tokio::io::AsyncWriteExt;
-use tokio::io::AsyncWriteExt;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
 use tokio::net::TcpStream;
-use tokio_util::compat::FuturesAsyncReadCompatExt;
-use tokio_util::compat::TokioAsyncReadCompatExt;
+use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, TokioAsyncReadCompatExt};
+// use tokio_util::compat::FuturesAsyncReadCompatExt;
+// use tokio_util::compat::TokioAsyncReadCompatExt;
 use yamux::{Config, Connection, Mode, Stream};
 
 use protocol::{ClientMessage, ServerMessage};
@@ -28,6 +26,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Open the control stream (stream 1) on the yamux session.
     let control_stream = poll_fn(|cx| yamux_session.poll_new_outbound(cx)).await?;
+    let control_stream = control_stream.compat();
 
     // Poll for new incoming streams. Each new incoming stream is a request sent
     // over from the Ferri server and represents an HTTP client.
@@ -39,7 +38,7 @@ async fn main() -> anyhow::Result<()> {
             match poll_fn(|cx| yamux_session.poll_next_inbound(cx)).await {
                 // New client connected
                 Some(Ok(stream)) => {
-                    tokio::spawn(proxy_stream(stream, port));
+                    tokio::spawn(proxy_stream(stream.compat(), port));
                 }
                 // An error occurred, abort.
                 Some(Err(e)) => {
@@ -86,7 +85,7 @@ fn format_url(subdomain: &str) -> String {
 }
 
 // Send REGISTER to Ferri to obtain a new DNS
-async fn register(mut control_stream: Stream) -> anyhow::Result<String> {
+async fn register(mut control_stream: Compat<Stream>) -> anyhow::Result<String> {
     // Create REGISTER payload
     let frame = protocol::encode(&ClientMessage::Register);
     control_stream.write_all(&frame).await?;
@@ -108,24 +107,31 @@ async fn register(mut control_stream: Stream) -> anyhow::Result<String> {
 /// Dials `localhost:port`, then shuttles bytes in both directions until either
 /// side closes. A failed local dial is logged and the stream is dropped, which
 /// closes it on the server side.
-async fn proxy_stream(mut stream: yamux::Stream, port: u16) -> anyhow::Result<()> {
+async fn proxy_stream(mut stream: Compat<Stream>, port: u16) -> anyhow::Result<()> {
     // Connect to the local port via ipv4.
     let mut tcp = TcpStream::connect(("127.0.0.1", port))
         .await
         .with_context(|| format!("dial localhost:{port}"))?;
 
     // peak at the stream to see the first incoming webrequest
+    let started = Instant::now();
     let (request_line, bytes) = peek_request_line(&mut stream).await?;
 
     // Write out all the bytes we peeked
-    // Create compatible stream for Tokio AsyncRead
-    let mut stream = stream.compat();
+    tcp.write_all(bytes.as_slice()).await?;
 
     // Create a bidirectional connection between the stream and the tcp socket
     let (to_local, to_remote) = tokio::io::copy_bidirectional(&mut tcp, &mut stream).await?;
 
     // If we reach this point, the stream has been terminated either on the TCP side or the Ferri side.
-    eprintln!("proxy done: local<-{to_local}B  local->{to_remote}B");
+    println!(
+        "{:>4} {:<40} {}ms Rx: {}B, Tx: {}B",
+        request_line.method,
+        request_line.path,
+        started.elapsed().as_millis(),
+        to_local,
+        to_remote
+    );
     Ok(())
 }
 
@@ -134,7 +140,7 @@ struct RequestLine {
     path: String,
 }
 
-async fn peek_request_line(reader: &mut yamux::Stream) -> anyhow::Result<(RequestLine, Vec<u8>)> {
+async fn peek_request_line(reader: &mut Compat<Stream>) -> anyhow::Result<(RequestLine, Vec<u8>)> {
     let mut buffer = Vec::with_capacity(1024);
     let mut tmp = [0u8; 512];
 
