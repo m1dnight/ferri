@@ -25,14 +25,9 @@ pub enum ClientMessage {
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum ServerMessage {
     /// The tunnel is live and ready to accept visitor connections.
-    Registered {
-        subdomain: String,
-        url: String,
-    },
+    Registered { subdomain: String, url: String },
     /// Registration (or another control operation) failed.
-    Error {
-        reason: String,
-    },
+    Error { reason: String },
 }
 
 /// Encode a [`ClientMessage`] as a length-prefixed JSON frame.
@@ -75,8 +70,7 @@ mod tests {
 
         // First 4 bytes are the big-endian length of the JSON payload
         let len = u32::from_be_bytes([frame[0], frame[1], frame[2], frame[3]]) as usize;
-        let json: serde_json::Value =
-            serde_json::from_slice(&frame[4..4 + len]).unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&frame[4..4 + len]).unwrap();
 
         assert_eq!(json["type"], "register");
         assert_eq!(frame.len(), 4 + len);
@@ -136,9 +130,12 @@ mod tests {
         let register_frame = encode(&ClientMessage::Register);
 
         // Verify the register frame is well-formed
-        let len =
-            u32::from_be_bytes([register_frame[0], register_frame[1], register_frame[2], register_frame[3]])
-                as usize;
+        let len = u32::from_be_bytes([
+            register_frame[0],
+            register_frame[1],
+            register_frame[2],
+            register_frame[3],
+        ]) as usize;
         assert_eq!(register_frame.len(), 4 + len);
 
         // Simulate a server response using the same framing

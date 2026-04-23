@@ -5,6 +5,8 @@ use std::future::poll_fn;
 
 use futures::AsyncReadExt;
 use futures::AsyncWriteExt;
+use futures::FutureExt;
+use futures::select;
 use tokio::net::TcpStream;
 use tokio_util::compat::TokioAsyncReadCompatExt;
 use yamux::{Config, Connection, Mode};
@@ -50,8 +52,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Read REGISTERED / ERROR response
     let mut buf = vec![0u8; 1024];
     let n = control.read(&mut buf).await?;
-    let (response, _) = protocol::decode(&buf[..n])
-        .expect("incomplete or missing response from server");
+    let (response, _) =
+        protocol::decode(&buf[..n]).expect("incomplete or missing response from server");
 
     match response {
         ServerMessage::Registered { subdomain, .. } => {
@@ -88,13 +90,33 @@ async fn proxy_stream(stream: yamux::Stream, port: u16) {
         }
     };
 
-    let (mut tcp_r, mut tcp_w) = tcp.compat().split();
-    let (mut yx_r, mut yx_w) = stream.split();
+    let (mut tcp_in, mut tcp_out) = tcp.compat().split();
+    let (mut yamux_in, mut yamux_out) = stream.split();
 
-    let to_local = futures::io::copy(&mut yx_r, &mut tcp_w);
-    let to_remote = futures::io::copy(&mut tcp_r, &mut yx_w);
+    let to_local = async {
+        let n = futures::io::copy(&mut yamux_in, &mut tcp_out).await;
+        eprintln!("Connection to Ferri stream terminated: {n:?}");
+        let _ = tcp_out.close().await;
+        eprintln!("yamux -> local ended: {n:?}");
+        n
+    };
+    let to_remote = async {
+        let n = futures::io::copy(&mut tcp_in, &mut yamux_out).await;
+        eprintln!("Connection to local endpoint terminated: {n:?}");
+        let _ = yamux_out.close().await;
+        n
+    };
 
-    if let Err(e) = futures::future::try_join(to_local, to_remote).await {
-        eprintln!("proxy error: {e}");
+    select! {
+        _ = to_remote.fuse() => {
+            // Ferri server closed the connection
+            let _ = tcp_out.close().await;
+            println!("to_remote finished");
+        },
+        _ = to_local.fuse() => {
+            // The local connection disconnected, so we won't be writing to yamux anymore.
+            let _ = yamux_out.close().await;
+            println!("to_local finished");
+        }
     }
 }
