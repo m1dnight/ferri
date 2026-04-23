@@ -9,7 +9,7 @@ defmodule Ferri.Application do
   def start(_type, _args) do
     children = [
       FerriWeb.Telemetry,
-      Ferri.Repo,
+      # Ferri.Repo,
       {DNSCluster, query: Application.get_env(:ferri, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Ferri.PubSub},
       Ferri.Tunnel.Registry,

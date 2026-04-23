@@ -94,16 +94,14 @@ defmodule Ferri.Tunnel.Handler do
 
   defp handle_control_message(%{"type" => "register"}, state) do
     {_control_id, control_pid} = state.control_stream
-    # subdomain = Registry.generate_subdomain()
-    subdomain = "foobar"
+    subdomain = Registry.generate_subdomain()
 
     case Registry.register(subdomain, self()) do
       :ok ->
-        url = "https://#{subdomain}.ferri.dev"
+        url = "https://#{subdomain}.#{FerriWeb.Endpoint.host()}"
         Logger.info("Tunnel registered: #{url}")
 
-        response =
-          Jason.encode!(%{type: "registered", subdomain: subdomain, url: url})
+        response = Jason.encode!(%{type: "registered", subdomain: subdomain, url: url})
 
         :ok = send_control_message(control_pid, response)
         %{state | subdomain: subdomain, session_pid: self()}

@@ -1,6 +1,8 @@
 connections := "100"
 duration := "10s"
 
+ferri_prod:
+  PHX_SERVER=true PHX_HOST=localhost SECRET_KEY_BASE=0mofhrLV3VrPEk60ocWwfQ+jE5MXoECGNAAuGd91FQtzjEYwGUSdm4/rMVGBbO7m DATABASE_URL=ecto://USER:PASS@HOST/DATABASE MIX_ENV=prod iex -S mix
 webserver:
     python3 scripts/hello_server.py
 
