@@ -6,23 +6,17 @@ use std::future::poll_fn;
 use anyhow::Context;
 use futures::AsyncReadExt;
 use futures::AsyncWriteExt;
-use futures::FutureExt;
-use futures::select;
 use tokio::net::TcpStream;
+use tokio_util::compat::FuturesAsyncReadCompatExt;
 use tokio_util::compat::TokioAsyncReadCompatExt;
-use yamux::Stream;
-use yamux::{Config, Connection, Mode};
+use yamux::{Config, Connection, Mode, Stream};
 
 use protocol::{ClientMessage, ServerMessage};
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> anyhow::Result<()> {
     // Parse the port to connect to locally.
-    let port: u16 = env::args()
-        .nth(1)
-        .expect("usage: ferri <port>")
-        .parse()
-        .expect("port must be a number");
+    let port = parse_args();
 
     // Connect to the Ferri server over TCP, and then create a Yamux session.
     let stream = TcpStream::connect("localhost:59595").await?;
@@ -55,7 +49,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Try and register a new subdomain
     let subdomain = register(control_stream).await?;
-    let url = format_url(subdomain);
+    let url = format_url(&subdomain);
     println!("Tunnel live at {url} -> localhost:{port}");
 
     // Keep the connection alive
@@ -64,9 +58,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Parse the CLI arguments.
+/// Exits with code 2 to signal misused command
+fn parse_args() -> u16 {
+    let Some(raw) = env::args().nth(1) else {
+        eprintln!("usage: ferri <port>");
+        std::process::exit(2);
+    };
+    raw.parse().unwrap_or_else(|_| {
+        eprintln!("usage: ferri <port>  (port must be 1-65535)");
+        std::process::exit(2);
+    })
+}
+
 /// Formats the session name into the full URL.
 /// In debugging this is localhost, otherwise ferri.
-fn format_url(subdomain: String) -> String {
+fn format_url(subdomain: &str) -> String {
     if cfg!(debug_assertions) {
         format!("http://{subdomain}.localhost:8080")
     } else {
@@ -97,42 +104,19 @@ async fn register(mut control_stream: Stream) -> anyhow::Result<String> {
 /// Dials `localhost:port`, then shuttles bytes in both directions until either
 /// side closes. A failed local dial is logged and the stream is dropped, which
 /// closes it on the server side.
-async fn proxy_stream(stream: yamux::Stream, port: u16) {
-    let tcp = match TcpStream::connect(("127.0.0.1", port)).await {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("failed to dial localhost:{port}: {e}");
-            return;
-        }
-    };
+async fn proxy_stream(stream: yamux::Stream, port: u16) -> anyhow::Result<()> {
+    // Connect to the local port via ipv4.
+    let mut tcp = TcpStream::connect(("127.0.0.1", port))
+        .await
+        .with_context(|| format!("dial localhost:{port}"))?;
 
-    let (mut tcp_in, mut tcp_out) = tcp.compat().split();
-    let (mut yamux_in, mut yamux_out) = stream.split();
+    // Create compatible stream for Tokio AsyncRead
+    let mut stream = stream.compat();
 
-    let to_local = async {
-        let n = futures::io::copy(&mut yamux_in, &mut tcp_out).await;
-        eprintln!("Connection to Ferri stream terminated: {n:?}");
-        let _ = tcp_out.close().await;
-        eprintln!("yamux -> local ended: {n:?}");
-        n
-    };
-    let to_remote = async {
-        let n = futures::io::copy(&mut tcp_in, &mut yamux_out).await;
-        eprintln!("Connection to local endpoint terminated: {n:?}");
-        let _ = yamux_out.close().await;
-        n
-    };
+    // Create a bidirectional connection between the stream and the tcp socket
+    let (to_local, to_remote) = tokio::io::copy_bidirectional(&mut tcp, &mut stream).await?;
 
-    select! {
-        _ = to_remote.fuse() => {
-            // Ferri server closed the connection
-            let _ = tcp_out.close().await;
-            println!("to_remote finished");
-        },
-        _ = to_local.fuse() => {
-            // The local connection disconnected, so we won't be writing to yamux anymore.
-            let _ = yamux_out.close().await;
-            println!("to_local finished");
-        }
-    }
+    // If we reach this point, the stream has been terminated either on the TCP side or the Ferri side.
+    eprintln!("proxy done: local<-{to_local}B  local->{to_remote}B");
+    Ok(())
 }
