@@ -15,29 +15,35 @@ use protocol::{ClientMessage, ServerMessage};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Parse the port to connect to locally.
     let port: u16 = env::args()
         .nth(1)
         .expect("usage: ferri <port>")
         .parse()
         .expect("port must be a number");
 
+    // Connect to the Ferri server over TCP, and then create a Yamux session.
     let stream = TcpStream::connect("localhost:59595").await?;
-    let mut conn = Connection::new(stream.compat(), Config::default(), Mode::Client);
+    let mut yamux_session = Connection::new(stream.compat(), Config::default(), Mode::Client);
 
-    // Open the control stream (stream 1)
-    let mut control = poll_fn(|cx| conn.poll_new_outbound(cx)).await?;
+    // Open the control stream (stream 1) on the yamux session.
+    let mut control_stream = poll_fn(|cx| yamux_session.poll_new_outbound(cx)).await?;
 
-    // Drive the connection in the background. Each inbound stream is a visitor
-    // request proxied by the server; hand it to a fresh task so concurrent
-    // visitors don't block the driver or each other.
+    // Poll for new incoming streams. Each new incoming stream is a request sent
+    // over from the Ferri server and represents an HTTP client.
+    //
+    // Notice we have not registered yet, this is just to make sure we catch a
+    // connection as soon as we are registered.
     tokio::spawn(async move {
         loop {
-            match poll_fn(|cx| conn.poll_next_inbound(cx)).await {
+            match poll_fn(|cx| yamux_session.poll_next_inbound(cx)).await {
+                // New client connected
                 Some(Ok(stream)) => {
                     tokio::spawn(proxy_stream(stream, port));
                 }
+                // An error occurred, abort.
                 Some(Err(e)) => {
-                    eprintln!("yamux error: {e}");
+                    eprintln!("Yamux error: {e}");
                     break;
                 }
                 None => break,
@@ -45,13 +51,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    // Send REGISTER
+    // Send REGISTER to Ferri to obtain a new DNS
     let frame = protocol::encode(&ClientMessage::Register);
-    control.write_all(&frame).await?;
+    control_stream.write_all(&frame).await?;
 
     // Read REGISTERED / ERROR response
     let mut buf = vec![0u8; 1024];
-    let n = control.read(&mut buf).await?;
+    let n = control_stream.read(&mut buf).await?;
     let (response, _) =
         protocol::decode(&buf[..n]).expect("incomplete or missing response from server");
 

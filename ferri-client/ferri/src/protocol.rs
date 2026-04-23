@@ -39,9 +39,13 @@ pub fn encode(msg: &ClientMessage) -> Vec<u8> {
 
 /// Decode a [`ServerMessage`] from a length-prefixed JSON frame.
 ///
-/// Returns the parsed message and the total number of bytes consumed
-/// (4-byte header + JSON body), so the caller can advance past the frame
-/// in a larger buffer.
+/// Each ServerMessage from Ferri is a JSON string with it's length prefixed.
+/// Yes this is stupid, but I wanted it quick and dirty right now. LEAVE ME
+/// ALONE.
+///
+/// Returns the parsed message and the total number of bytes consumed (4-byte
+/// header + JSON body), so the caller can advance past the frame in a larger
+/// buffer.
 ///
 /// Returns `None` if the buffer does not yet contain a complete frame.
 pub fn decode(buf: &[u8]) -> Option<(ServerMessage, usize)> {
