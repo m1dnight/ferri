@@ -1,20 +1,53 @@
+![alt text](priv/static/images/logo.svg)
+
 # Ferri
 
-Ferri 
+Ferri tunnels HTTP traffic from your localhost through a free SSL-terminating endpoint. You can use it for free, or host it yourself.
 
-To start your Phoenix server:
 
-* Run `mix setup` to install and setup dependencies
-* Start Phoenix endpoint with `mix phx.server` or inside IEx with `iex -S mix phx.server`
+```mermaid
+architecture-beta
 
-Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
+    group ferri_group(cloud)[ferri]
+    service ferri(server)[Ferri] in ferri_group
 
-Ready to run in production? Please [check our deployment guides](https://hexdocs.pm/phoenix/deployment.html).
 
-## Learn more
+    group localhost(cloud)[localhost]
+    service app(server)[Webapp] in localhost
 
-* Official website: https://www.phoenixframework.org/
-* Guides: https://hexdocs.pm/phoenix/overview.html
-* Docs: https://hexdocs.pm/phoenix
-* Forum: https://elixirforum.com/c/phoenix-forum
-* Source: https://github.com/phoenixframework/phoenix
+    group internet(internet)[internet]
+    service browser(server)[Browser] in internet
+
+    app:R <--> L:ferri
+    ferri:R <--> L:browser
+```
+
+## Using Ferri
+
+To run Ferri you can run the `ferri` client locally and point it to a web-application running on `localhost`. Assuming I have a webapp running at `localhost:4444` this will give you a public-facing URL.
+
+```shell
+% ferri 4444
+Tunnel live at https://greatest-app.ferri.run -> localhost:4444
+GET /    112ms Rx: 1102B, Tx: 2557B
+```
+## Features
+
+ - SSL termination at the Ferri host
+ - Random human-readdable URLs
+ - Single-binary local client
+
+## Why?
+
+I built this because I was looking for a fun project to build that would expose me to new things. It started out by implementing the simple [Yamux](https://github.com/hashicorp/yamux) protocol after reading the [Network Programming in Elixir and Erlang book](https://pragprog.com/titles/alnpee/network-programming-in-elixir-and-erlang/) by Andrea Leopardi. I personally like using ngrok, and it works perfectly fine. I find it an interesting piece of software and wondered how it all worked exactly.
+
+
+## Self-hosting
+
+To self-host Ferri you need a handful of things:
+
+ - A VPS
+ - A domain name with a wildcard A-record
+ - A webserver that supports wildcard domains
+
+I currently host Ferri on a VPS with Caddy and a wildcard domain at Gandi.

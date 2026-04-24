@@ -70,7 +70,7 @@ defmodule Ferri.MixProject do
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
-      {:typedstruct, "~> 0.5.4"},
+      {:typed_struct, "~> 0.3"},
       {:stream_data, "~> 1.0", only: :test},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},

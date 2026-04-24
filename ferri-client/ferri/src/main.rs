@@ -21,7 +21,7 @@ async fn main() -> anyhow::Result<()> {
     let port = parse_args();
 
     // Connect to the Ferri server over TCP, and then create a Yamux session.
-    let stream = TcpStream::connect("ferri.genserver.be:59595").await?;
+    let stream = TcpStream::connect("ferri.run:59595").await?;
     let mut yamux_session = Connection::new(stream.compat(), Config::default(), Mode::Client);
 
     // Open the control stream (stream 1) on the yamux session.
@@ -80,7 +80,7 @@ fn format_url(subdomain: &str) -> String {
     if cfg!(debug_assertions) {
         format!("http://{subdomain}.localhost:8080")
     } else {
-        format!("https://{subdomain}.ferri.genserver.be")
+        format!("https://{subdomain}.ferri.run")
     }
 }
 
