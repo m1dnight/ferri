@@ -5,23 +5,12 @@ duration := "10s"
 # and tar it up for scp to the VPS.
 release:
     #!/usr/bin/env bash
-    set -euo pipefail
-    rm -rf release-linux
-    docker buildx build \
-        --platform linux/amd64 \
-        --target release \
-        --output type=local,dest=release-linux \
-        -f Dockerfile.release \
-        .
-    tar czf /tmp/ferri-release.tar.gz -C release-linux ferri
-    echo "wrote /tmp/ferri-release.tar.gz  ($(du -sh /tmp/ferri-release.tar.gz | cut -f1))"
+    export MIX_ENV=prod
+    mix deps.get --only=prod
+    mix assets.deploy
+    mix release --overwrite
+    unset MIX_ENV
 
-# Transfer the built release to the VPS.
-deploy host="admin@platform.genserver.be":
-    scp /tmp/ferri-release.tar.gz {{host}}:/tmp/
-
-ferri_prod:
-  PHX_SERVER=true PHX_HOST=localhost SECRET_KEY_BASE=0mofhrLV3VrPEk60ocWwfQ+jE5MXoECGNAAuGd91FQtzjEYwGUSdm4/rMVGBbO7m DATABASE_URL=ecto://USER:PASS@HOST/DATABASE MIX_ENV=prod iex -S mix
 webserver:
     python3 scripts/hello_server.py
 
