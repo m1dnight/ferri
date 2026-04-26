@@ -1,0 +1,126 @@
+name: release-server
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    name: test + credo + dialyzer
+    runs-on: ubuntu-latest
+
+    env:
+      MIX_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        id: beam
+        with:
+          otp-version: '27.3'
+          elixir-version: '1.18.4'
+
+      - name: Cache deps + _build
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: mix-${{ runner.os }}-otp-${{ steps.beam.outputs.otp-version }}-elixir-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            mix-${{ runner.os }}-otp-${{ steps.beam.outputs.otp-version }}-elixir-${{ steps.beam.outputs.elixir-version }}-
+
+      - name: Install hex + rebar
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
+
+      - name: Fetch deps
+        run: mix deps.get
+
+      - name: Compile (warnings as errors)
+        run: mix compile --warnings-as-errors
+
+      - name: Tests
+        run: mix test --exclude interop
+
+      - name: Credo (strict)
+        run: mix credo --strict
+
+      - name: Dialyzer
+        run: mix dialyzer --format github
+
+  build:
+    name: build server (${{ matrix.target }})
+    needs: verify
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x86_64
+            os: ubuntu-latest
+          - target: linux-arm64
+            os: ubuntu-24.04-arm
+
+    env:
+      MIX_ENV: prod
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        id: beam
+        with:
+          otp-version: '27.3'
+          elixir-version: '1.18.4'
+
+      - name: Cache deps + _build (prod)
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: server-prod-${{ matrix.target }}-otp-${{ steps.beam.outputs.otp-version }}-elixir-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            server-prod-${{ matrix.target }}-otp-${{ steps.beam.outputs.otp-version }}-elixir-${{ steps.beam.outputs.elixir-version }}-
+
+      - name: Build release
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
+          mix deps.get --only=prod
+          mix release
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          NAME=ferri-server-${GITHUB_REF_NAME}-${{ matrix.target }}
+          tar czf dist/${NAME}.tar.gz -C _build/prod/rel ferri
+          (cd dist && shasum -a 256 ${NAME}.tar.gz > ${NAME}.tar.gz.sha256)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ferri-server-${{ matrix.target }}
+          path: dist/*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
