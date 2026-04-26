@@ -21,7 +21,7 @@ async fn main() -> anyhow::Result<()> {
     let port = parse_args();
 
     // Connect to the Ferri server over TCP, and then create a Yamux session.
-    let stream = TcpStream::connect("ferri.run:59595").await?;
+    let stream = TcpStream::connect(ferri_endpoint()).await?;
     let mut yamux_session = Connection::new(stream.compat(), Config::default(), Mode::Client);
 
     // Open the control stream (stream 1) on the yamux session.
@@ -51,8 +51,7 @@ async fn main() -> anyhow::Result<()> {
     });
 
     // Try and register a new subdomain
-    let subdomain = register(control_stream).await?;
-    let url = format_url(&subdomain);
+    let url  = register(control_stream).await?;
     println!("Tunnel live at {url} -> localhost:{port}");
 
     // Keep the connection alive
@@ -74,13 +73,12 @@ fn parse_args() -> u16 {
     })
 }
 
-/// Formats the session name into the full URL.
-/// In debugging this is localhost, otherwise ferri.
-fn format_url(subdomain: &str) -> String {
+/// Returns the endpoint of Ferri to request a new subdomain.
+fn ferri_endpoint() -> String {
     if cfg!(debug_assertions) {
-        format!("http://{subdomain}.localhost:8080")
+        format!("localhost:59595")
     } else {
-        format!("https://{subdomain}.ferri.run")
+        format!("ferri.run:59595")
     }
 }
 
@@ -98,7 +96,7 @@ async fn register(mut control_stream: Compat<Stream>) -> anyhow::Result<String> 
 
     match response {
         ServerMessage::Error { reason } => Err(anyhow::anyhow!("registration failed: {reason}")),
-        ServerMessage::Registered { subdomain, .. } => Ok(subdomain),
+        ServerMessage::Registered { url, .. } => Ok(url),
     }
 }
 

@@ -1,5 +1,8 @@
 import Config
 
+config :ferri,
+  env: :dev
+
 # Configure your database
 config :ferri, Ferri.Repo,
   username: "postgres",

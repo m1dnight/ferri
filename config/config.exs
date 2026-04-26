@@ -13,6 +13,7 @@ config :ferri,
   tcp_port: 59595,
   http_port: 8080
 
+
 # Configure the endpoint
 config :ferri, FerriWeb.Endpoint,
   url: [host: "localhost"],

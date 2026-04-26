@@ -98,7 +98,7 @@ defmodule Ferri.Tunnel.Handler do
 
     case Registry.register(subdomain, self()) do
       :ok ->
-        url = "https://#{subdomain}.#{FerriWeb.Endpoint.host()}"
+        url = generate_url(subdomain)
         Logger.info("Tunnel registered: #{url}")
 
         response = Jason.encode!(%{type: "registered", subdomain: subdomain, url: url})
@@ -122,5 +122,18 @@ defmodule Ferri.Tunnel.Handler do
   defp send_control_message(stream_pid, json) when is_binary(json) do
     frame = <<byte_size(json)::32-big, json::binary>>
     Yamux.Stream.send_data(stream_pid, frame)
+  end
+
+  # generates a url for the client that matches the envronment
+  @spec generate_url(String.t()) :: String.t()
+  defp generate_url(subdomain) do
+    case Application.get_env(:ferri, :env) do
+      env when env in [:dev, :test] ->
+        port = Application.get_env(:ferri, :http_port)
+        "http://#{subdomain}.#{FerriWeb.Endpoint.host()}:#{port}"
+
+      :prod ->
+        "https://#{subdomain}.#{FerriWeb.Endpoint.host()}"
+    end
   end
 end
