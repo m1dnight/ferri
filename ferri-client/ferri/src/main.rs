@@ -1,94 +1,77 @@
 mod protocol;
+mod proxy;
+mod tui;
 
 use std::env;
 use std::future::poll_fn;
-use std::time::Instant;
 
 use anyhow::Context;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
 use tokio::net::TcpStream;
+use tokio::sync::mpsc;
 use tokio_util::compat::{Compat, FuturesAsyncReadCompatExt, TokioAsyncReadCompatExt};
-// use tokio_util::compat::FuturesAsyncReadCompatExt;
-// use tokio_util::compat::TokioAsyncReadCompatExt;
 use yamux::{Config, Connection, Mode, Stream};
 
 use protocol::{ClientMessage, ServerMessage};
+use proxy::proxy_stream;
+use tui::LogSink;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Parse the port to connect to locally.
     let port = parse_args();
 
-    // Connect to the Ferri server over TCP, and then create a Yamux session.
+    // Channel: everything that wants to print does so by sending a String here;
+    // the TUI drains it into the on-screen log buffer.
+    let (log_tx, log_rx) = mpsc::unbounded_channel::<String>();
+
+    // Connect to the Ferri server and create a yamux session over it.
     let stream = TcpStream::connect(ferri_endpoint()).await?;
     let mut yamux_session = Connection::new(stream.compat(), Config::default(), Mode::Client);
 
-    // Open the control stream (stream 1) on the yamux session.
+    // Open the control stream (stream 1).
     let control_stream = poll_fn(|cx| yamux_session.poll_new_outbound(cx)).await?;
     let control_stream = control_stream.compat();
 
-    // Poll for new incoming streams. Each new incoming stream is a request sent
-    // over from the Ferri server and represents an HTTP client.
-    //
-    // Notice we have not registered yet, this is just to make sure we catch a
-    // connection as soon as we are registered.
+    // Drive inbound streams in a background task — each is one visitor request.
+    spawn_inbound_driver(yamux_session, port, log_tx.clone());
+
+    // Register a subdomain.
+    let url = register(control_stream).await?;
+    let _ = log_tx.send(format!("Tunnel live at {url} -> localhost:{port}"));
+
+    // The TUI takes over the terminal; returns when the user presses q / Ctrl-C.
+    tui::run(log_rx).await
+}
+
+/// Continuously listens for new incoming connections on the yamux stream from
+/// the Ferri server. Each new stream is a new connection to the http endpoint.
+fn spawn_inbound_driver(mut session: Connection<Compat<TcpStream>>, port: u16, log: LogSink) {
     tokio::spawn(async move {
         loop {
-            match poll_fn(|cx| yamux_session.poll_next_inbound(cx)).await {
-                // New client connected
+            match poll_fn(|cx| session.poll_next_inbound(cx)).await {
                 Some(Ok(stream)) => {
-                    tokio::spawn(proxy_stream(stream.compat(), port));
+                    let log = log.clone();
+                    tokio::spawn(async move {
+                        if let Err(e) = proxy_stream(stream.compat(), port, log.clone()).await {
+                            let _ = log.send(format!("proxy error: {e}"));
+                        }
+                    });
                 }
-                // An error occurred, abort.
                 Some(Err(e)) => {
-                    eprintln!("Yamux error: {e}");
+                    let _ = log.send(format!("yamux error: {e}"));
                     break;
                 }
                 None => break,
             }
         }
     });
-
-    // Try and register a new subdomain
-    let url  = register(control_stream).await?;
-    println!("Tunnel live at {url} -> localhost:{port}");
-
-    // Keep the connection alive
-    futures::future::pending::<()>().await;
-
-    Ok(())
 }
 
-/// Parse the CLI arguments.
-/// Exits with code 2 to signal misused command
-fn parse_args() -> u16 {
-    let Some(raw) = env::args().nth(1) else {
-        eprintln!("usage: ferri <port>");
-        std::process::exit(2);
-    };
-    raw.parse().unwrap_or_else(|_| {
-        eprintln!("usage: ferri <port>  (port must be 1-65535)");
-        std::process::exit(2);
-    })
-}
-
-/// Returns the endpoint of Ferri to request a new subdomain.
-fn ferri_endpoint() -> String {
-    if cfg!(debug_assertions) {
-        format!("localhost:59595")
-    } else {
-        format!("ferri.run:59595")
-    }
-}
-
-// Send REGISTER to Ferri to obtain a new DNS
+/// Register with the Ferri server to obtain a new URL.
 async fn register(mut control_stream: Compat<Stream>) -> anyhow::Result<String> {
-    // Create REGISTER payload
     let frame = protocol::encode(&ClientMessage::Register);
     control_stream.write_all(&frame).await?;
 
-    // Read REGISTERED / ERROR response
     let mut buf = vec![0u8; 1024];
     let n = control_stream.read(&mut buf).await?;
     let (response, _) =
@@ -100,70 +83,24 @@ async fn register(mut control_stream: Compat<Stream>) -> anyhow::Result<String> 
     }
 }
 
-/// Proxy a single yamux stream (one visitor request) to the local port.
-///
-/// Dials `localhost:port`, then shuttles bytes in both directions until either
-/// side closes. A failed local dial is logged and the stream is dropped, which
-/// closes it on the server side.
-async fn proxy_stream(mut stream: Compat<Stream>, port: u16) -> anyhow::Result<()> {
-    // Connect to the local port via ipv4.
-    let mut tcp = TcpStream::connect(("127.0.0.1", port))
-        .await
-        .with_context(|| format!("dial localhost:{port}"))?;
-
-    // peak at the stream to see the first incoming webrequest
-    let started = Instant::now();
-    let (request_line, bytes) = peek_request_line(&mut stream).await?;
-
-    // Write out all the bytes we peeked
-    tcp.write_all(bytes.as_slice()).await?;
-
-    // Create a bidirectional connection between the stream and the tcp socket
-    let (to_local, to_remote) = tokio::io::copy_bidirectional(&mut tcp, &mut stream).await?;
-
-    // If we reach this point, the stream has been terminated either on the TCP side or the Ferri side.
-    println!(
-        "{:>4} {:<40} {}ms Rx: {}B, Tx: {}B",
-        request_line.method,
-        request_line.path,
-        started.elapsed().as_millis(),
-        to_local,
-        to_remote
-    );
-    Ok(())
+/// Parse the CLI arguments. Exits with code 2 on misuse.
+fn parse_args() -> u16 {
+    let Some(raw) = env::args().nth(1) else {
+        eprintln!("usage: ferri <port>");
+        std::process::exit(2);
+    };
+    raw.parse().unwrap_or_else(|_| {
+        eprintln!("usage: ferri <port>  (port must be 1-65535)");
+        std::process::exit(2);
+    })
 }
 
-struct RequestLine {
-    method: String,
-    path: String,
-}
-
-async fn peek_request_line(reader: &mut Compat<Stream>) -> anyhow::Result<(RequestLine, Vec<u8>)> {
-    let mut buffer = Vec::with_capacity(1024);
-    let mut tmp = [0u8; 512];
-
-    loop {
-        let bytes_read = reader.read(&mut tmp).await?;
-
-        if bytes_read == 0 {
-            anyhow::bail!("stream ended before request line");
-        }
-
-        // Copy the read bytes into the buffer
-        buffer.extend_from_slice(&tmp[..bytes_read]);
-
-        // Try and parse the request to figure out its path and method.
-        if let Some(end) = buffer.windows(2).position(|w| w == b"\r\n") {
-            let line =
-                std::str::from_utf8(&buffer[..end]).context("request line is not valid UTF-8")?;
-            let mut parts = line.splitn(3, ' ');
-            let method = parts.next().context("missing method")?.to_string();
-            let path = parts.next().context("missing path")?.to_string();
-            return Ok((RequestLine { method, path }, buffer));
-        }
-
-        if buffer.len() > 8 * 1024 {
-            anyhow::bail!("request line exceeds 8 KB");
-        }
+/// Generates the Ferri endpoint. If the binary is not run in release mode it
+/// will use a local instance of ferri instead of the hosted version.
+fn ferri_endpoint() -> &'static str {
+    if cfg!(debug_assertions) {
+        "localhost:59595"
+    } else {
+        "ferri.run:59595"
     }
 }
