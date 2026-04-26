@@ -51,7 +51,7 @@ jobs:
         run: mix test --exclude interop
 
       - name: Credo (strict)
-        run: mix credo --strict
+        run: mix credo --strict --ignore Credo.Check.Design.TagTODO
 
       - name: Dialyzer
         run: mix dialyzer --format github

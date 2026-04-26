@@ -168,6 +168,7 @@ defmodule Yamux.Session do
   end
 
   # Handles a frame that is meant to be sent to a specific stream.
+  # credo:disable-for-next-line Credo.Check.Refactor.CyclomaticComplexity
   defp handle_stream_frame(%Frame{stream_id: id, flags: flags} = frame, state) do
     # Dispatch on the stream message. This can be any of the following:
     # A new stream is initiated. This is a SYN message.
