@@ -19,11 +19,12 @@ defmodule Ferri.DataCase do
 
   using do
     quote do
-      alias Ferri.Repo
-
-      import Ecto
-      import Ecto.Changeset
-      import Ecto.Query
+      # DB-TESTS-DISABLED: commented to remove database requirements for tests.
+      # Re-enable when Ferri.Repo is added back to the supervision tree.
+      # alias Ferri.Repo
+      # import Ecto
+      # import Ecto.Changeset
+      # import Ecto.Query
       import Ferri.DataCase
     end
   end
@@ -35,10 +36,15 @@ defmodule Ferri.DataCase do
 
   @doc """
   Sets up the sandbox based on the test tags.
+
+  Currently a no-op — no Repo wired up yet.
   """
-  def setup_sandbox(tags) do
-    pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Ferri.Repo, shared: not tags[:async])
-    on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
+  def setup_sandbox(_tags) do
+    # DB-TESTS-DISABLED: commented to remove database requirements for tests.
+    # Re-enable when Ferri.Repo is added back to the supervision tree.
+    # pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Ferri.Repo, shared: not tags[:async])
+    # on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
+    :ok
   end
 
   @doc """
