@@ -87,21 +87,22 @@ To run Ferri on a VPS, you need to install Caddy and Ferri as a SystemD service.
 
 ### Ferri
 
+#### From Source
 Create a release on a machine with the same architecture are your VPS. I.e., you
 cannot build this on  Apple Silicon and deploy on an x86 VM.
 
 ```bash
 just release
 ```
-This will produce the release under `_build/prod/rel`. Copy these files onto
-your VPS.
 
-```bash
-# on the machine that built the release
-rsync -r _build/prod/rel/ferri admin@yourvps.com:/tmp/
-# on the vps
-cp -r /tmp/ferri /opt/
-```
+This will produce the release under `_build/prod/rel`. Copy these files onto
+your VPS into `/opt/`.
+
+#### From GitHub
+
+You can fetch any release from the release page [here](https://github.com/m1dnight/ferri/releases). Copy the extracted output to `/opt/` like below.
+
+### SystemD
 
 Then create `/etc/ferri/env`
 ```bash
