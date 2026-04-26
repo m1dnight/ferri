@@ -1,4 +1,4 @@
-![alt text](priv/static/images/logo.svg)
+![Ferri Logo. Two concentric orange circles with a black arrow pointing left to right. The text Ferri right of it.](priv/static/images/logo.svg)
 
 # Ferri
 
@@ -28,12 +28,19 @@ To run Ferri you can run the `ferri` client locally and point it to a
 web-application running on `localhost`. Assuming I have a webapp running at
 `localhost:4444` this will give you a public-facing URL.
 
+You can install the client using the following command. Check the source of the script [here](https://raw.githubusercontent.com/m1dnight/ferri/refs/heads/main/scripts/install.sh).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/m1dnight/ferri/refs/heads/main/scripts/install.sh | sh
+```
+
+Then run Ferri and point it to a local HTTP port.
 
 ```shell
-% ferri 4444
-Tunnel live at https://greatest-app.ferri.run -> localhost:4444
-GET /    112ms Rx: 1102B, Tx: 2557B
+ferri 4444
 ```
+
+![Screenshot of the Ferri terminal client running.](priv/static/images/ferri-terminal.png)
 ## Features
 
  - SSL termination at the Ferri host
