@@ -2,7 +2,7 @@ defmodule Ferri.Tunnel.Handler do
   @moduledoc """
   Yamux handler for Ferri tunnel control sessions.
 
-  When a Rust client connects on port 4433 and opens a yamux session, this
+  When a Rust client connects on port 59595 and opens a yamux session, this
   handler manages the control protocol:
 
   1. Client opens stream 1 (control stream)
@@ -31,7 +31,7 @@ defmodule Ferri.Tunnel.Handler do
   def new_stream(stream_id, stream_pid, state) do
     # The first stream opened by the client is the control stream.
     if state.control_stream == nil do
-      Logger.info("Control stream opened: #{stream_id}")
+      Logger.debug("Control stream opened: #{stream_id}")
       {:ok, %{state | control_stream: {stream_id, stream_pid}}}
     else
       {:ok, state}
@@ -43,10 +43,12 @@ defmodule Ferri.Tunnel.Handler do
     Logger.debug("Data received: #{inspect(data)}")
     {control_id, _control_pid} = state.control_stream
 
+    # if the stream is the control stream, it's control data from the ferri
+    # client. all data coming from visitors will be handled by the connection.ex
+    # process so can be ignored here.
     if stream_id == control_id do
       handle_control_data(data, state)
     else
-      # Visitor stream data — handled by the proxy, not the control handler
       {:ok, state}
     end
   end
@@ -78,10 +80,7 @@ defmodule Ferri.Tunnel.Handler do
 
   # matches if the buffer starts with a length header and enough bytes that
   # constitute an entire json payload.
-  defp drain_control_messages(
-         <<length::32-big, json::binary-size(length), rest::binary>>,
-         state
-       ) do
+  defp drain_control_messages(<<length::32-big, json::binary-size(length), rest::binary>>, state) do
     message = Jason.decode!(json)
     state = handle_control_message(message, state)
     drain_control_messages(rest, %{state | buffer: <<>>})
@@ -92,6 +91,7 @@ defmodule Ferri.Tunnel.Handler do
     {:ok, %{state | buffer: remaining}}
   end
 
+  # handles a complete control message
   defp handle_control_message(%{"type" => "register"}, state) do
     {_control_id, control_pid} = state.control_stream
     subdomain = Registry.generate_subdomain()
@@ -118,6 +118,7 @@ defmodule Ferri.Tunnel.Handler do
     state
   end
 
+  # send a control message on the sessions' control stream.
   defp send_control_message(stream_pid, json) when is_binary(json) do
     frame = <<byte_size(json)::32-big, json::binary>>
     Yamux.Stream.send_data(stream_pid, frame)
