@@ -6,6 +6,15 @@ defmodule Yamux.Handler do
   sessions and streams. The session will invoke these callbacks as events
   occur on the underlying TCP connection.
 
+  Most callbacks return `{:ok, new_state}` to continue. To terminate the
+  session from inside a callback (e.g. on a protocol violation), return
+  `{:go_away, reason, new_state}` — the session emits a GoAway frame to the
+  peer with the given reason and shuts down. `reason` is one of `:normal`,
+  `:protocol_error`, `:internal_error` (see `Yamux.Session.go_away/2`).
+
+  External callers (not inside a handler callback) can also ask a session
+  to shut down by calling `Yamux.Session.go_away/2` directly.
+
   ## Example
 
       defmodule MyApp.EchoHandler do
@@ -45,6 +54,14 @@ defmodule Yamux.Handler do
       end
   """
 
+  @typedoc "Reason carried in a handler-initiated GoAway."
+  @type go_away_reason :: :normal | :protocol_error | :internal_error
+
+  @typedoc "Return shape for callbacks that may continue or shut the session down."
+  @type callback_return(state) ::
+          {:ok, state}
+          | {:go_away, go_away_reason(), state}
+
   @doc """
   Called when the session starts.
 
@@ -63,7 +80,7 @@ defmodule Yamux.Handler do
               stream_id :: non_neg_integer(),
               stream_pid :: pid(),
               state :: term()
-            ) :: {:ok, new_state :: term()}
+            ) :: callback_return(term())
 
   @doc """
   Called when data arrives on an existing stream.
@@ -73,7 +90,7 @@ defmodule Yamux.Handler do
               data :: binary(),
               stream_pid :: pid(),
               state :: term()
-            ) :: {:ok, new_state :: term()}
+            ) :: callback_return(term())
 
   @doc """
   Called when a stream is half-closed by the remote (FIN received).
@@ -82,7 +99,7 @@ defmodule Yamux.Handler do
               stream_id :: non_neg_integer(),
               stream_pid :: pid(),
               state :: term()
-            ) :: {:ok, new_state :: term()}
+            ) :: callback_return(term())
 
   @doc """
   Called when a stream is abruptly reset by the remote (RST received).
@@ -91,14 +108,14 @@ defmodule Yamux.Handler do
               stream_id :: non_neg_integer(),
               stream_pid :: pid(),
               state :: term()
-            ) :: {:ok, new_state :: term()}
+            ) :: callback_return(term())
 
   @doc """
   Called when a ping is received (before the automatic pong is sent).
 
   `opaque` is the 32-bit value from the ping frame.
   """
-  @callback ping(opaque :: non_neg_integer(), state :: term()) :: {:ok, new_state :: term()}
+  @callback ping(opaque :: non_neg_integer(), state :: term()) :: callback_return(term())
 
   @doc """
   Called when the session is shutting down (go_away received or TCP closed).
