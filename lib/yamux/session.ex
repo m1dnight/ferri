@@ -224,9 +224,8 @@ defmodule Yamux.Session do
 
         # Invoke the handler for a new stream, and if the SYN had data, pass
         # that as well.
-        with {:ok, state} <- invoke_handler(state, :new_stream, [id, pid]),
-             {:ok, state} <- maybe_run_stream_data(state, frame, id, pid) do
-          {:ok, state}
+        with {:ok, state} <- invoke_handler(state, :new_stream, [id, pid]) do
+          maybe_run_stream_data(state, frame, id, pid)
         end
 
       # The client sent a FIN message, meaning they want to half-close.
@@ -289,6 +288,7 @@ defmodule Yamux.Session do
   # Calls a handler callback and converts its return into the same {:ok, state}
   # / {:error, {:go_away, reason}, state} channel that drain_frames threads
   # back to handle_info.
+  @spec invoke_handler(Session.t(), atom(), [term()]) :: drain_result()
   defp invoke_handler(%{handler: nil} = state, _callback, _args), do: {:ok, state}
 
   defp invoke_handler(state, callback, args) do
@@ -306,7 +306,8 @@ defmodule Yamux.Session do
   defp invoke_terminate(%{handler: nil}, _reason), do: :ok
 
   defp invoke_terminate(state, reason) do
-    _ = apply(state.handler, :terminate, [reason, state.handler_state])
+    state.handler.terminate(reason, state.handler_state)
+    # _ = apply(state.handler, :terminate, [reason, state.handler_state])
     :ok
   end
 
