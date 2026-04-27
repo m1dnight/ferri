@@ -7,6 +7,8 @@ defmodule Ferri.Application do
 
   @impl true
   def start(_type, _args) do
+    Ferri.Statistics.init()
+
     children = [
       Ferri.Tunnel.Registry,
       FerriWeb.Telemetry,

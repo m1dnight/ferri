@@ -1,0 +1,54 @@
+<div class="ferri-landing">
+  <div class="ferri-page">
+    <header class="ferri-top">
+      <a class="ferri-brand" href={~p"/"}>
+        <svg class="ferri-brand-mark" viewBox="0 0 60 60" fill="none" aria-hidden="true">
+          <circle class="ring-outer" cx="30" cy="30" r="26" stroke-width="2.4" />
+          <circle class="ring-inner" cx="30" cy="30" r="16" stroke-width="1.6" />
+          <path
+            class="arrow"
+            d="M14 30 H46 M40 24 L46 30 L40 36"
+            stroke-width="2.4"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+        <span class="ferri-brand-name">Ferri</span>
+      </a>
+
+      <nav class="ferri-nav">
+        <a href={~p"/dashboard"}>Dashboard</a>
+      </nav>
+
+      <div class="ferri-meta">
+        <span class="dot"></span>
+        <span>v{Application.spec(:ferri, :vsn)} — current</span>
+      </div>
+    </header>
+
+    <section class="ferri-hero">
+      <div class="ferri-section-label">
+        Dashboard <span class="ferri-live">live</span>
+      </div>
+
+      <h1>Live numbers.</h1>
+
+      <div class="ferri-stats">
+        <div class="ferri-stat">
+          <div class="ferri-stat-label">Active sessions</div>
+          <div class="ferri-stat-value">{@sessions}</div>
+        </div>
+        <div class="ferri-stat">
+          <div class="ferri-stat-label">Upload</div>
+          <div class="ferri-stat-value">{format_rate(@up_bps)}</div>
+          <div class="ferri-stat-total">{format_bytes(@total_up)} total</div>
+        </div>
+        <div class="ferri-stat">
+          <div class="ferri-stat-label">Download</div>
+          <div class="ferri-stat-value">{format_rate(@down_bps)}</div>
+          <div class="ferri-stat-total">{format_bytes(@total_down)} total</div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>

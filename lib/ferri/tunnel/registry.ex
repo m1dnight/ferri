@@ -15,6 +15,14 @@ defmodule Ferri.Tunnel.Registry do
   end
 
   @doc """
+  Returns the total active sessions.
+  """
+  @spec session_count :: non_neg_integer()
+  def session_count do
+    :ets.foldl(fn _, acc -> acc + 1 end, 0, @table)
+  end
+
+  @doc """
   Register a subdomain for the given session. Returns :ok or {:error, :taken}.
   """
   @spec register(String.t(), pid()) :: :ok | {:error, :taken}

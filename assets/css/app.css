@@ -103,3 +103,687 @@
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
 /* This file is for your main application CSS */
+
+/* — Ferri landing page (scoped) — */
+.ferri-landing {
+  --paper: #f3ede1;
+  --paper-deep: #ebe3d3;
+  --ink: #15151a;
+  --ink-soft: #4a4a55;
+  --ink-faint: #8a8579;
+  --rule: #c9c0ad;
+  --orange: #e95a1f;
+  --orange-soft: #f5d8c4;
+
+  --serif: "Instrument Serif", "Iowan Old Style", "Apple Garamond", Georgia, serif;
+  --sans: "IBM Plex Sans", "Helvetica Neue", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", "SF Mono", Menlo, monospace;
+
+  --measure: 64ch;
+
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+
+  min-height: 100dvh;
+  position: relative;
+  isolation: isolate;
+}
+
+.ferri-landing,
+.ferri-landing *,
+.ferri-landing *::before,
+.ferri-landing *::after { box-sizing: border-box; }
+
+.ferri-landing::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  mix-blend-mode: multiply;
+  background-image:
+    radial-gradient(rgba(40, 30, 10, 0.035) 1px, transparent 1px),
+    radial-gradient(rgba(40, 30, 10, 0.025) 1px, transparent 1px);
+  background-size: 3px 3px, 7px 7px;
+  background-position: 0 0, 1px 2px;
+  z-index: 1;
+}
+
+.ferri-landing a { color: inherit; text-decoration: none; }
+.ferri-landing a:hover { color: var(--orange); }
+
+.ferri-landing :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.85em;
+  background: var(--paper-deep);
+  color: var(--ink);
+  padding: 1px 6px;
+  border-radius: 2px;
+}
+
+.ferri-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 48px;
+  position: relative;
+  z-index: 2;
+}
+
+/* — top bar — */
+.ferri-top {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 40px;
+  padding: 28px 0 22px;
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.ferri-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--ink);
+}
+
+.ferri-brand-mark {
+  width: 28px;
+  height: 28px;
+  display: block;
+  overflow: visible;
+}
+.ferri-brand-mark .ring-outer { stroke: var(--ink); }
+.ferri-brand-mark .ring-inner { stroke: var(--orange); opacity: 0.9; }
+.ferri-brand-mark .arrow {
+  stroke: var(--ink);
+  transform-origin: center;
+  animation: ferri-nudge 5.6s ease-in-out infinite;
+}
+
+@keyframes ferri-nudge {
+  0%, 100% { transform: translateX(-1.2px); }
+  45% { transform: translateX(1.2px); }
+  55% { transform: translateX(1.2px); }
+}
+
+.ferri-brand-name {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 22px;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: var(--ink);
+  line-height: 1;
+  transform: translateY(1px);
+}
+
+.ferri-nav {
+  display: flex;
+  gap: 28px;
+  justify-content: center;
+}
+
+.ferri-meta {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.ferri-meta .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--orange);
+  box-shadow: 0 0 0 3px rgba(233, 90, 31, 0.18);
+}
+
+/* — section scaffolding — */
+.ferri-landing section {
+  padding: 96px 0;
+  border-bottom: 1px solid var(--rule);
+  position: relative;
+}
+.ferri-landing section:last-of-type { border-bottom: none; }
+
+.ferri-section-label {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+.ferri-section-label::before {
+  content: "";
+  width: 14px;
+  height: 1px;
+  background: var(--ink-faint);
+}
+
+/* — hero — */
+.ferri-hero {
+  padding: 56px 0 72px !important;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 36px;
+}
+
+.ferri-hero h1 {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(38px, 5.4vw, 78px);
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--ink);
+  max-width: 20ch;
+}
+
+.ferri-hero-headline {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 60px;
+  align-items: end;
+}
+
+.ferri-hero-headline .ferri-download {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+.ferri-hero h1 em {
+  font-style: italic;
+  color: var(--orange);
+}
+.ferri-hero h1 .ampersand {
+  font-style: italic;
+  font-weight: 400;
+  color: var(--ink-soft);
+  padding: 0 0.06em;
+}
+
+.ferri-hero-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 80px;
+  align-items: end;
+}
+
+.ferri-lede {
+  font-family: var(--serif);
+  font-size: 22px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  max-width: 38ch;
+  margin: 0;
+}
+.ferri-lede em { color: var(--ink); font-style: italic; }
+
+.ferri-hero-aside {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--ink-soft);
+  letter-spacing: 0.02em;
+  border-left: 1px solid var(--rule);
+  padding: 4px 0 4px 22px;
+  max-width: 36ch;
+}
+.ferri-hero-aside .k {
+  color: var(--ink-faint);
+  display: inline-block;
+  min-width: 8.5ch;
+}
+.ferri-hero-aside .v { color: var(--ink); }
+
+/* — install / two col — */
+.ferri-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  gap: 80px;
+  align-items: start;
+}
+
+.ferri-landing h2 {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-style: italic;
+  font-size: clamp(40px, 5vw, 64px);
+  line-height: 1.02;
+  letter-spacing: -0.015em;
+  margin: 0 0 28px;
+  max-width: 18ch;
+  color: var(--ink);
+}
+
+.ferri-landing p {
+  margin: 0 0 1em;
+  max-width: var(--measure);
+}
+.ferri-body {
+  color: var(--ink-soft);
+  font-size: 16.5px;
+}
+
+.ferri-terminal,
+.ferri-terminal code {
+  background: var(--ink);
+  color: #f1ede2;
+}
+
+.ferri-terminal {
+  border-radius: 2px;
+  padding: 36px 28px 26px;
+  font-family: var(--mono);
+  font-size: 13.5px;
+  line-height: 1.75;
+  letter-spacing: 0.01em;
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.04),
+    0 18px 40px -22px rgba(20, 15, 5, 0.45);
+  position: relative;
+  overflow-x: auto;
+  margin: 0;
+  white-space: pre;
+}
+
+.ferri-terminal code {
+  font-family: inherit;
+  font-size: inherit;
+  padding: 0;
+  border-radius: 0;
+}
+.ferri-terminal::before {
+  content: "ferri@local — zsh";
+  position: absolute;
+  top: 8px;
+  left: 14px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(241, 237, 226, 0.35);
+}
+.ferri-terminal .prompt { color: var(--orange); user-select: none; }
+.ferri-terminal .comment { color: rgba(241, 237, 226, 0.4); }
+.ferri-terminal .out { color: rgba(241, 237, 226, 0.78); }
+.ferri-terminal .url {
+  color: #ffd9a8;
+  border-bottom: 1px dotted rgba(255, 217, 168, 0.4);
+}
+.ferri-terminal .arrow { color: var(--orange); }
+.ferri-terminal .key { color: #b3d6ff; }
+
+.ferri-install-note {
+  margin-top: 18px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+}
+
+/* — download disclosure — */
+.ferri-download {
+  display: inline-block;
+  margin-top: 26px;
+  position: relative;
+}
+
+.ferri-download summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  padding: 13px 20px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-radius: 2px;
+  transition: background 0.15s ease, color 0.15s ease;
+  user-select: none;
+}
+
+.ferri-download summary::-webkit-details-marker { display: none; }
+.ferri-download summary::marker { content: ""; }
+
+.ferri-download summary:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.ferri-download summary .caret {
+  display: inline-block;
+  transition: transform 0.2s ease;
+  font-size: 13px;
+  line-height: 1;
+}
+.ferri-download[open] summary .caret { transform: rotate(90deg); }
+
+.ferri-download-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 320px;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  z-index: 10;
+  box-shadow: 0 18px 40px -22px rgba(20, 15, 5, 0.45);
+}
+
+.ferri-download-list li { border-bottom: 1px solid var(--rule); }
+.ferri-download-list li:last-child { border-bottom: none; }
+
+.ferri-download-list a {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 24px;
+  padding: 14px 18px;
+  color: var(--ink);
+}
+.ferri-download-list a:hover {
+  background: var(--paper-deep);
+  color: var(--ink);
+}
+
+.ferri-download-list .os {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 19px;
+  color: var(--ink);
+  line-height: 1;
+}
+
+.ferri-download-list .arch {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.ferri-download-list li.all .os {
+  font-style: normal;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.ferri-download-list li.all .arch {
+  color: var(--orange);
+  font-size: 14px;
+  letter-spacing: 0;
+}
+
+/* — features — */
+.ferri-features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  border-top: 1px solid var(--rule);
+  margin-top: 16px;
+}
+
+.ferri-feature {
+  padding: 40px 36px 8px 0;
+  border-right: 1px solid var(--rule);
+  position: relative;
+}
+.ferri-feature:last-child { border-right: none; padding-right: 0; }
+.ferri-feature:not(:first-child) { padding-left: 36px; }
+
+.ferri-feature .num {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 64px;
+  line-height: 1;
+  color: var(--orange);
+  display: block;
+  margin-bottom: 18px;
+}
+
+.ferri-feature h3 {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 28px;
+  line-height: 1.15;
+  margin: 0 0 14px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.ferri-feature p {
+  color: var(--ink-soft);
+  font-size: 15.5px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* — releases — */
+.ferri-releases { display: flex; flex-direction: column; }
+
+.ferri-release {
+  display: grid;
+  grid-template-columns: 7ch 14ch 1fr auto;
+  gap: 32px;
+  align-items: baseline;
+  padding: 22px 0;
+  border-top: 1px solid var(--rule);
+  font-size: 15.5px;
+}
+.ferri-release:last-child { border-bottom: 1px solid var(--rule); }
+
+.ferri-release .v {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 26px;
+  color: var(--ink);
+}
+.ferri-release .d {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.ferri-release .desc { color: var(--ink-soft); }
+.ferri-release .tag {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  border: 1px solid var(--rule);
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.ferri-release.latest .tag {
+  color: var(--orange);
+  border-color: var(--orange);
+}
+
+/* — why — */
+.ferri-why {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 80px;
+  align-items: start;
+}
+.ferri-why p {
+  font-family: var(--serif);
+  font-size: 22px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  max-width: 42ch;
+}
+.ferri-why p em { color: var(--ink); font-style: italic; }
+
+/* — colophon / footer — */
+.ferri-colophon {
+  padding: 64px 0 80px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  border-top: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.ferri-colophon .col strong {
+  display: block;
+  color: var(--ink);
+  font-weight: 500;
+  margin-bottom: 14px;
+  letter-spacing: 0.1em;
+}
+.ferri-colophon a { display: block; padding: 4px 0; }
+
+.ferri-colophon .signoff {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 36px;
+  margin-top: 8px;
+  border-top: 1px solid var(--rule);
+}
+
+/* — dashboard stats — */
+.ferri-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  margin-top: 24px;
+}
+
+.ferri-stat {
+  padding: 32px 36px 32px 0;
+  border-right: 1px solid var(--rule);
+  position: relative;
+}
+.ferri-stat:last-child { border-right: none; padding-right: 0; }
+.ferri-stat:not(:first-child) { padding-left: 36px; }
+
+.ferri-stat-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 14px;
+}
+
+.ferri-stat-value {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 400;
+  font-size: clamp(40px, 4.6vw, 64px);
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--orange);
+  font-variant-numeric: tabular-nums;
+}
+
+.ferri-stat-total {
+  margin-top: 14px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* live pulse next to the section label */
+.ferri-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-left: 10px;
+}
+.ferri-live::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--orange);
+  box-shadow: 0 0 0 0 rgba(233, 90, 31, 0.55);
+  animation: ferri-pulse 1.6s ease-out infinite;
+}
+@keyframes ferri-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(233, 90, 31, 0.55); }
+  70%  { box-shadow: 0 0 0 8px rgba(233, 90, 31, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(233, 90, 31, 0); }
+}
+
+/* — responsive — */
+@media (max-width: 900px) {
+  .ferri-page { padding: 0 24px; }
+  .ferri-top { grid-template-columns: 1fr auto; }
+  .ferri-meta { display: none; }
+  .ferri-nav { gap: 18px; font-size: 10px; }
+  .ferri-hero { padding: 64px 0 !important; gap: 36px; }
+  .ferri-hero-headline { grid-template-columns: 1fr; gap: 28px; align-items: start; }
+  .ferri-hero-headline .ferri-download { margin-bottom: 0; }
+  .ferri-hero-grid,
+  .ferri-two-col,
+  .ferri-why { grid-template-columns: 1fr; gap: 36px; }
+  .ferri-features { grid-template-columns: 1fr; }
+  .ferri-feature {
+    border-right: none;
+    border-bottom: 1px solid var(--rule);
+    padding: 28px 0;
+  }
+  .ferri-feature:not(:first-child) { padding-left: 0; }
+  .ferri-feature:last-child { border-bottom: none; }
+  .ferri-stats { grid-template-columns: 1fr; }
+  .ferri-stat {
+    border-right: none;
+    border-bottom: 1px solid var(--rule);
+    padding: 24px 0;
+  }
+  .ferri-stat:not(:first-child) { padding-left: 0; }
+  .ferri-stat:last-child { border-bottom: none; }
+  .ferri-release {
+    grid-template-columns: 1fr auto;
+    gap: 6px 16px;
+  }
+  .ferri-release .desc { grid-column: 1 / -1; }
+  .ferri-colophon { grid-template-columns: 1fr; }
+  .ferri-colophon .signoff {
+    flex-direction: column;
+    gap: 14px;
+    align-items: flex-start;
+  }
+}
