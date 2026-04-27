@@ -97,7 +97,9 @@ jobs:
           mix local.hex --force
           mix local.rebar --force
           mix deps.get --only=prod
-          mix release
+          mix assets.setup
+          mix assets.deploy
+          mix release --overwrite
 
       - name: Package
         run: |
