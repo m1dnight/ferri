@@ -4,6 +4,8 @@
 
 Ferri tunnels HTTP traffic from your localhost through a free SSL-terminating endpoint. You can use it for free, or host it yourself.
 
+To get started, install the client and use the [hosted Ferri](https://ferri.run) for free
+
 
 ```mermaid
 architecture-beta
@@ -25,7 +27,7 @@ architecture-beta
 ## Using Ferri
 
 To run Ferri you can run the `ferri` client locally and point it to a
-web-application running on `localhost`. Assuming I have a webapp running at
+web-application running on `localhost`. Assuming you have a webapp running at
 `localhost:4444` this will give you a public-facing URL.
 
 You can install the client using the following command. Check the source of the script [here](https://raw.githubusercontent.com/m1dnight/ferri/refs/heads/main/scripts/install.sh).
