@@ -219,6 +219,35 @@ defmodule Yamux.FrameTest do
   # ---------------------------------------------------------------------------
   # Flag checks
 
+  describe "go_away/1" do
+    test "builds a session-scoped frame with the error code in length" do
+      frame = Frame.go_away(1)
+
+      assert frame.type == 0x3
+      assert frame.flags == 0x0
+      assert frame.stream_id == 0
+      assert frame.body == <<>>
+      assert frame.length == 1
+    end
+
+    test "defaults to normal (0) when no code is given" do
+      assert Frame.go_away().length == 0
+    end
+
+    test "encode + parse round-trip preserves the error code" do
+      encoded = Frame.encode(Frame.go_away(2))
+      assert {:ok, parsed, <<>>} = Frame.parse(encoded)
+
+      assert parsed.type == 0x3
+      assert parsed.stream_id == 0
+      assert parsed.length == 2
+    end
+
+    test "raises on out-of-range codes" do
+      assert_raise FunctionClauseError, fn -> Frame.go_away(3) end
+    end
+  end
+
   describe "flag checks" do
     # syn? returns true when bit 0 (0x1) is set.
     property "syn? is true iff SYN bit is set" do
