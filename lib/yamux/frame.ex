@@ -270,7 +270,9 @@ defmodule Yamux.Frame do
   * `1` — protocol error
   * `2` — internal error
   """
-  @spec go_away(0..2) :: Frame.t()
+  # the success type is a subtype of the spec, but i dont know how to fix it properly
+  @dialyzer {:nowarn_function, go_away: 1}
+  @spec go_away(0 | 1 | 2) :: Frame.t()
   def go_away(code \\ 0) when code in 0..2 do
     %Frame{
       type: @go_away,
