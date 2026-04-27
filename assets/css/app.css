@@ -673,6 +673,80 @@
   border-top: 1px solid var(--rule);
 }
 
+/* — dashboard stats — */
+.ferri-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  margin-top: 24px;
+}
+
+.ferri-stat {
+  padding: 32px 36px 32px 0;
+  border-right: 1px solid var(--rule);
+  position: relative;
+}
+.ferri-stat:last-child { border-right: none; padding-right: 0; }
+.ferri-stat:not(:first-child) { padding-left: 36px; }
+
+.ferri-stat-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 14px;
+}
+
+.ferri-stat-value {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 400;
+  font-size: clamp(40px, 4.6vw, 64px);
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--orange);
+  font-variant-numeric: tabular-nums;
+}
+
+.ferri-stat-total {
+  margin-top: 14px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* live pulse next to the section label */
+.ferri-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-left: 10px;
+}
+.ferri-live::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--orange);
+  box-shadow: 0 0 0 0 rgba(233, 90, 31, 0.55);
+  animation: ferri-pulse 1.6s ease-out infinite;
+}
+@keyframes ferri-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(233, 90, 31, 0.55); }
+  70%  { box-shadow: 0 0 0 8px rgba(233, 90, 31, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(233, 90, 31, 0); }
+}
+
 /* — responsive — */
 @media (max-width: 900px) {
   .ferri-page { padding: 0 24px; }
@@ -693,6 +767,14 @@
   }
   .ferri-feature:not(:first-child) { padding-left: 0; }
   .ferri-feature:last-child { border-bottom: none; }
+  .ferri-stats { grid-template-columns: 1fr; }
+  .ferri-stat {
+    border-right: none;
+    border-bottom: 1px solid var(--rule);
+    padding: 24px 0;
+  }
+  .ferri-stat:not(:first-child) { padding-left: 0; }
+  .ferri-stat:last-child { border-bottom: none; }
   .ferri-release {
     grid-template-columns: 1fr auto;
     gap: 6px 16px;

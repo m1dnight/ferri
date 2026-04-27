@@ -1,54 +1,62 @@
 defmodule FerriWeb.DashboardLive do
   use FerriWeb, :live_view
 
+  alias Ferri.Statistics
+
+  @tick_ms 1000
+  @history_size 60
+
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, page_title: "Dashboard — Ferri")}
+    if connected?(socket), do: :timer.send_interval(@tick_ms, :tick)
+
+    # Read the initial snapshot
+    snapshot = Statistics.snapshot()
+
+    {:ok,
+     assign(socket,
+       page_title: "Dashboard — Ferri",
+       sessions: snapshot.sessions,
+       up_bps: snapshot.down,
+       down_bps: snapshot.up,
+       total_up: snapshot.up,
+       total_down: snapshot.down,
+       history: [],
+       prev: snapshot
+     )}
   end
 
   @impl true
-  def render(assigns) do
-    ~H"""
-    <div class="ferri-landing">
-      <div class="ferri-page">
-        <header class="ferri-top">
-          <a class="ferri-brand" href={~p"/"}>
-            <svg class="ferri-brand-mark" viewBox="0 0 60 60" fill="none" aria-hidden="true">
-              <circle class="ring-outer" cx="30" cy="30" r="26" stroke-width="2.4" />
-              <circle class="ring-inner" cx="30" cy="30" r="16" stroke-width="1.6" />
-              <path
-                class="arrow"
-                d="M14 30 H46 M40 24 L46 30 L40 36"
-                stroke-width="2.4"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-            <span class="ferri-brand-name">Ferri</span>
-          </a>
+  def handle_info(:tick, socket) do
+    now = Statistics.snapshot()
+    prev = socket.assigns.prev
 
-          <nav class="ferri-nav">
-            <a href={~p"/dashboard"}>Dashboard</a>
-          </nav>
+    up = now.up - prev.up
+    down = now.down - prev.down
 
-          <div class="ferri-meta">
-            <span class="dot"></span>
-            <span>v{Application.spec(:ferri, :vsn)} — current</span>
-          </div>
-        </header>
+    history =
+      [{System.system_time(:second), up, down} | socket.assigns.history]
+      |> Enum.take(@history_size)
 
-        <section class="ferri-hero">
-          <div class="ferri-section-label">Dashboard</div>
-
-          <h1>Live numbers,<br /><em>soon.</em></h1>
-
-          <p class="ferri-lede">
-            Tunnel counts, traffic, and uptime will live here. Wired up
-            with LiveView so the figures update without a refresh.
-          </p>
-        </section>
-      </div>
-    </div>
-    """
+    {:noreply,
+     assign(socket,
+       sessions: now.sessions,
+       up_bps: up,
+       down_bps: down,
+       total_up: now.up,
+       total_down: now.down,
+       history: history,
+       prev: now
+     )}
   end
+
+  @doc false
+  @spec format_rate(non_neg_integer()) :: String.t()
+  def format_rate(bps), do: format_bytes(bps) <> "/s"
+
+  @spec format_bytes(non_neg_integer()) :: String.t()
+  def format_bytes(n) when n < 1_000, do: "#{n} B"
+  def format_bytes(n) when n < 1_000_000, do: :io_lib.format("~.1f KB", [n / 1_000]) |> to_string()
+  def format_bytes(n) when n < 1_000_000_000, do: :io_lib.format("~.1f MB", [n / 1_000_000]) |> to_string()
+  def format_bytes(n), do: :io_lib.format("~.2f GB", [n / 1_000_000_000]) |> to_string()
 end
