@@ -8,7 +8,7 @@ defmodule FerriWeb.DashboardLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    if connected?(socket), do: :timer.send_interval(@tick_ms, :tick)
+    _ = if connected?(socket), do: :timer.send_interval(@tick_ms, :tick)
 
     # Read the initial snapshot
     snapshot = Statistics.snapshot()
@@ -56,7 +56,12 @@ defmodule FerriWeb.DashboardLive do
 
   @spec format_bytes(non_neg_integer()) :: String.t()
   def format_bytes(n) when n < 1_000, do: "#{n} B"
-  def format_bytes(n) when n < 1_000_000, do: :io_lib.format("~.1f KB", [n / 1_000]) |> to_string()
-  def format_bytes(n) when n < 1_000_000_000, do: :io_lib.format("~.1f MB", [n / 1_000_000]) |> to_string()
+
+  def format_bytes(n) when n < 1_000_000,
+    do: :io_lib.format("~.1f KB", [n / 1_000]) |> to_string()
+
+  def format_bytes(n) when n < 1_000_000_000,
+    do: :io_lib.format("~.1f MB", [n / 1_000_000]) |> to_string()
+
   def format_bytes(n), do: :io_lib.format("~.2f GB", [n / 1_000_000_000]) |> to_string()
 end
