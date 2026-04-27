@@ -96,6 +96,7 @@ defmodule Ferri.MixProject do
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["compile", "tailwind ferri", "esbuild ferri"],
       "assets.deploy": [
+        "compile",
         "tailwind ferri --minify",
         "esbuild ferri --minify",
         "phx.digest"
