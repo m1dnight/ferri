@@ -19,6 +19,7 @@ defmodule Ferri.HttpListener.Connection do
 
   alias Ferri.HttpListener.Connection
   alias Ferri.HttpListener.Parser
+  alias Ferri.Statistics
   alias Ferri.Tunnel.Registry
 
   require Logger
@@ -78,6 +79,7 @@ defmodule Ferri.HttpListener.Connection do
 
   def handle_info({:stream_data, bytes}, %Connection{socket: socket} = state) do
     :ok = :gen_tcp.send(socket, bytes)
+    Statistics.bump_down(byte_size(bytes))
     {:noreply, state}
   end
 
@@ -161,6 +163,7 @@ defmodule Ferri.HttpListener.Connection do
   defp flush_to_session(%{stream: nil} = state) do
     with {:ok, stream} <- Yamux.Session.open_stream(state.session),
          :ok <- Yamux.Stream.send_data(stream, state.buffer) do
+      Statistics.bump_up(byte_size(state.buffer))
       # start a process that will send incoming data from the stream onto the socket
       state = put_in(state.stream, stream)
       {:ok, proxy} = start_stream_listener(state)
@@ -173,6 +176,7 @@ defmodule Ferri.HttpListener.Connection do
 
   defp flush_to_session(state) do
     :ok = Yamux.Stream.send_data(state.stream, state.buffer)
+    Statistics.bump_up(byte_size(state.buffer))
     put_in(state.buffer, <<>>)
   end
 
