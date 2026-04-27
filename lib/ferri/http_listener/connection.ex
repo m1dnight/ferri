@@ -110,6 +110,9 @@ defmodule Ferri.HttpListener.Connection do
 
       {:ok, flush_to_session(state)}
     else
+      {:error, :invalid_host} ->
+        {:error, :invalid_request}
+
       {:error, :not_valid_http} ->
         Logger.debug("Not a valid http request")
         {:error, :invalid_request}

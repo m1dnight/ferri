@@ -36,6 +36,19 @@ defmodule Yamux.Session do
   @spec open_stream(pid()) :: {:ok, pid()}
   def open_stream(session), do: GenServer.call(session, :open_stream)
 
+  @typedoc "GoAway error code per the yamux spec."
+  @type go_away_reason :: :normal | :protocol_error | :internal_error
+
+  @doc """
+  Sends a GoAway frame to the peer and stops the session. Safe to call from
+  inside a `Yamux.Handler` callback (it is async — the frame is sent and the
+  session stops on the next dispatch).
+  """
+  @spec go_away(GenServer.server(), go_away_reason()) :: :ok
+  def go_away(session, reason \\ :normal) do
+    GenServer.cast(session, {:go_away, reason})
+  end
+
   def start_link(socket, mode, opts \\ []) do
     # First start the genserver that will manage this session.
     {:ok, pid} = GenServer.start_link(__MODULE__, {socket, mode, opts})
@@ -94,17 +107,27 @@ defmodule Yamux.Session do
       {:ok, session} ->
         {:noreply, session}
 
+      # Peer sent us a GoAway — just tear down, no frame to emit.
       {:error, :go_away, state} ->
         notify_streams(state, :session_closed)
-        invoke_handler(state, :terminate, [:go_away])
+        invoke_terminate(state, :go_away)
         Logger.debug("Session terminating due to go away message")
         {:stop, :normal, :go_away}
+
+      # Handler asked us to send a GoAway — emit it, then tear down.
+      {:error, {:go_away, reason}, state} ->
+        frame = Frame.encode(Frame.go_away(go_away_code(reason)))
+        _ = :gen_tcp.send(state.socket, frame)
+        notify_streams(state, :session_closed)
+        invoke_terminate(state, :go_away)
+        Logger.debug("Session terminating; handler asked for GoAway (#{reason})")
+        {:stop, :normal, state}
     end
   end
 
   def handle_info({:tcp_closed, _socket}, state) do
     notify_streams(state, :session_closed)
-    invoke_handler(state, :terminate, [:tcp_closed])
+    invoke_terminate(state, :tcp_closed)
     Logger.debug("Session terminating; socket closed")
     {:stop, :normal, state}
   end
@@ -130,9 +153,25 @@ defmodule Yamux.Session do
     {:noreply, state}
   end
 
+  def handle_cast({:go_away, reason}, state) do
+    frame = Frame.encode(Frame.go_away(go_away_code(reason)))
+    _ = :gen_tcp.send(state.socket, frame)
+
+    notify_streams(state, :session_closed)
+    invoke_terminate(state, :go_away)
+    Logger.debug("Session terminating; sent GoAway (#{reason})")
+    {:stop, :normal, state}
+  end
+
+  # Result of processing one TCP buffer's worth of frames.
+  @typep drain_result ::
+           {:ok, Session.t()}
+           | {:error, :go_away, Session.t()}
+           | {:error, {:go_away, Yamux.Handler.go_away_reason()}, Session.t()}
+
   # Try and parse multiple frames from the buffer. If it succeeds, dispatch each
   # frame.
-  @spec drain_frames(Session.t()) :: {:ok, Session.t()} | {:error, :go_away, Session.t()}
+  @spec drain_frames(Session.t()) :: drain_result()
   defp drain_frames(state) do
     case Frame.parse(state.buffer) do
       {:ok, frame, rest} ->
@@ -146,8 +185,8 @@ defmodule Yamux.Session do
             drain_frames(state)
 
           # Encountered a go away message, stop the session.
-          {:error, :go_away, state} ->
-            {:error, :go_away, state}
+          {:error, _, _} = halt ->
+            halt
         end
 
       {:error, :incomplete} ->
@@ -157,8 +196,7 @@ defmodule Yamux.Session do
 
   # if the stream id is 0, this means that this is a frame asking information
   # about the session, not the stream (i.e., ping and go away).
-  @spec dispatch_frame(Frame.t(), Session.t()) ::
-          {:ok, Session.t()} | {:error, :go_away, Session.t()}
+  @spec dispatch_frame(Frame.t(), Session.t()) :: drain_result()
   defp dispatch_frame(%Frame{stream_id: 0} = frame, state) do
     handle_session_frame(frame, state)
   end
@@ -183,47 +221,31 @@ defmodule Yamux.Session do
         :ok = :gen_tcp.send(state.socket, Frame.encode(syn_ack))
 
         state = %{state | streams: Map.put(state.streams, id, pid)}
-        state = invoke_handler(state, :new_stream, [id, pid])
 
-        # SYN frames can carry data (piggybacked first write)
-        state =
-          if frame.type == 0x0 and byte_size(frame.body) > 0 do
-            invoke_handler(state, :stream_data, [id, frame.body, pid])
-          else
-            state
-          end
-
-        {:ok, state}
+        # Invoke the handler for a new stream, and if the SYN had data, pass
+        # that as well.
+        with {:ok, state} <- invoke_handler(state, :new_stream, [id, pid]) do
+          maybe_run_stream_data(state, frame, id, pid)
+        end
 
       # The client sent a FIN message, meaning they want to half-close.
       Frame.fin?(flags) and Map.has_key?(state.streams, id) ->
         Logger.debug("Half-closing stream #{id}")
         pid = Map.get(state.streams, id)
         send(pid, {:frame, frame})
-        state = invoke_handler(state, :stream_closed, [id, pid])
-        {:ok, state}
+        invoke_handler(state, :stream_closed, [id, pid])
 
       # RST — stream abruptly reset by remote
       Frame.rst?(flags) and Map.has_key?(state.streams, id) ->
         pid = Map.get(state.streams, id)
         send(pid, {:frame, frame})
-        state = invoke_handler(state, :stream_error, [id, pid])
-        {:ok, state}
+        invoke_handler(state, :stream_error, [id, pid])
 
       # The frame is directed at a currently existing stream
       Map.has_key?(state.streams, id) ->
         pid = Map.get(state.streams, id)
         send(pid, {:frame, frame})
-
-        # Notify handler of data frames with body content
-        state =
-          if frame.type == 0x0 and byte_size(frame.body) > 0 do
-            invoke_handler(state, :stream_data, [id, frame.body, pid])
-          else
-            state
-          end
-
-        {:ok, state}
+        maybe_run_stream_data(state, frame, id, pid)
 
       # We don't know this stream, it's data frame directed at a non-existing stream.
       true ->
@@ -232,20 +254,26 @@ defmodule Yamux.Session do
     end
   end
 
-  # If a session frame has flag 0x2, it's a ping message. If a session has frame
-  # flag 0x3, it's a go away message.
-  @spec handle_session_frame(Frame.t(), Session.t()) ::
-          {:ok, Session.t()} | {:error, :go_away, Session.t()}
+  # SYN and DATA frames can both carry a body. Only invoke :stream_data if there is one.
+  defp maybe_run_stream_data(state, %Frame{type: 0x0, body: body}, id, pid)
+       when byte_size(body) > 0 do
+    invoke_handler(state, :stream_data, [id, body, pid])
+  end
+
+  defp maybe_run_stream_data(state, _frame, _id, _pid), do: {:ok, state}
+
+  # If a session frame has type 0x2, it's a ping message. Type 0x3 is a peer-
+  # initiated go away.
+  @spec handle_session_frame(Frame.t(), Session.t()) :: drain_result()
   defp handle_session_frame(%Frame{type: 0x2} = frame, state) do
     # PING — if not an ack, send one back
-    unless Frame.ack?(frame.flags) do
-      response = Frame.encode(Frame.ping(frame.length, true))
-      _ = :gen_tcp.send(state.socket, response)
-      :ok
-    end
+    _ =
+      if not Frame.ack?(frame.flags) do
+        response = Frame.encode(Frame.ping(frame.length, true))
+        :gen_tcp.send(state.socket, response)
+      end
 
-    state = invoke_handler(state, :ping, [frame.length])
-    {:ok, state}
+    invoke_handler(state, :ping, [frame.length])
   end
 
   defp handle_session_frame(%Frame{type: 0x3}, state) do
@@ -257,18 +285,33 @@ defmodule Yamux.Session do
     Enum.each(state.streams, fn {_id, pid} -> send(pid, message) end)
   end
 
-  # Invokes a handler callback if a handler is configured. For callbacks that
-  # return {:ok, new_state}, the handler_state is updated. For :terminate,
-  # the return value is ignored.
-  defp invoke_handler(%{handler: nil} = state, _callback, _args), do: state
-
-  defp invoke_handler(state, :terminate, args) do
-    apply(state.handler, :terminate, args ++ [state.handler_state])
-    state
-  end
+  # Calls a handler callback and converts its return into the same {:ok, state}
+  # / {:error, {:go_away, reason}, state} channel that drain_frames threads
+  # back to handle_info.
+  @spec invoke_handler(Session.t(), atom(), [term()]) :: drain_result()
+  defp invoke_handler(%{handler: nil} = state, _callback, _args), do: {:ok, state}
 
   defp invoke_handler(state, callback, args) do
-    {:ok, new_hs} = apply(state.handler, callback, args ++ [state.handler_state])
-    %{state | handler_state: new_hs}
+    case apply(state.handler, callback, args ++ [state.handler_state]) do
+      {:ok, new_hs} ->
+        {:ok, %{state | handler_state: new_hs}}
+
+      {:go_away, reason, new_hs} ->
+        {:error, {:go_away, reason}, %{state | handler_state: new_hs}}
+    end
   end
+
+  # `:terminate` doesn't follow the callback_return contract — its return is
+  # ignored and it can't ask the (already-terminating) session to stop.
+  defp invoke_terminate(%{handler: nil}, _reason), do: :ok
+
+  defp invoke_terminate(state, reason) do
+    state.handler.terminate(reason, state.handler_state)
+    # _ = apply(state.handler, :terminate, [reason, state.handler_state])
+    :ok
+  end
+
+  defp go_away_code(:normal), do: 0
+  defp go_away_code(:protocol_error), do: 1
+  defp go_away_code(:internal_error), do: 2
 end

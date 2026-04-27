@@ -78,12 +78,27 @@ defmodule Ferri.Tunnel.Handler do
     drain_control_messages(buffer, state)
   end
 
+  # The control protocol's frames are tiny JSON; an oversized length header is
+  # either a bug or a slow-loris-style abuse. Tear down the session.
+  defp drain_control_messages(<<length::32-big, _rest::binary>>, state) when length > 128 do
+    Logger.warning("Control frame too large (#{length} bytes), going away")
+    {:go_away, :protocol_error, %{state | buffer: <<>>}}
+  end
+
   # matches if the buffer starts with a length header and enough bytes that
   # constitute an entire json payload.
   defp drain_control_messages(<<length::32-big, json::binary-size(length), rest::binary>>, state) do
-    message = Jason.decode!(json)
-    state = handle_control_message(message, state)
-    drain_control_messages(rest, %{state | buffer: <<>>})
+    case Jason.decode(json) do
+      # valid json
+      {:ok, message} ->
+        state = handle_control_message(message, state)
+        drain_control_messages(rest, %{state | buffer: <<>>})
+
+      # invalid json — peer is broken or hostile, tear down the session
+      {:error, _} ->
+        Logger.warning("Invalid control JSON, going away")
+        {:go_away, :protocol_error, %{state | buffer: <<>>}}
+    end
   end
 
   # we might have a length header, but were missing the entire body

@@ -4,9 +4,31 @@ defmodule Yamux.SessionTest do
   alias Yamux.Frame
   alias Yamux.Session
 
+  # Handler used by the "handler triggers go_away" test: any data on a stream
+  # causes the handler to ask the session to send a GoAway and shut down via
+  # the {:go_away, reason, state} callback return.
+  defmodule GoAwayOnDataHandler do
+    use Yamux.Handler
+
+    @impl true
+    def init(_mode), do: {:ok, %{}}
+
+    @impl true
+    def new_stream(_id, _pid, state), do: {:ok, state}
+
+    @impl true
+    def stream_data(_id, _data, _pid, state) do
+      {:go_away, :protocol_error, state}
+    end
+
+    @impl true
+    def stream_closed(_id, _pid, state), do: {:ok, state}
+  end
+
   # Starts a TCP listener, connects a client, and wraps both sides in sessions.
-  # Returns {client_session, server_session}.
-  defp setup_pair do
+  # Returns {client_session, server_session}. `server_opts` is forwarded to the
+  # server-side session (so tests can attach a handler).
+  defp setup_pair(server_opts \\ []) do
     {:ok, listener} = :gen_tcp.listen(0, [:binary, active: false, reuseaddr: true])
     {:ok, port} = :inet.port(listener)
 
@@ -19,7 +41,7 @@ defmodule Yamux.SessionTest do
 
     # Start sessions — they take over the sockets via controlling_process
     {:ok, client} = Session.start_link(client_socket, :client)
-    {:ok, server} = Session.start_link(server_socket, :server)
+    {:ok, server} = Session.start_link(server_socket, :server, server_opts)
 
     {client, server}
   end
@@ -169,6 +191,41 @@ defmodule Yamux.SessionTest do
       send_frame(client, go_away)
 
       assert_receive {:DOWN, ^ref, :process, ^server, :normal}, 1000
+    end
+
+    # A handler that returns {:go_away, reason, state} from a callback should
+    # cause the session to send a GoAway frame and stop. The peer (client),
+    # receiving the frame, also stops.
+    test "handler return tuple triggers go_away which stops both sessions" do
+      {client, server} = setup_pair(handler: GoAwayOnDataHandler)
+
+      client_ref = Process.monitor(client)
+      server_ref = Process.monitor(server)
+
+      # Open a stream from the client; the SYN reaches the server and creates
+      # the stream there (no handler.new_stream side effects).
+      {:ok, stream} = Session.open_stream(client)
+
+      # Sending data on the stream triggers the server's handler.stream_data,
+      # which returns {:go_away, :protocol_error, state}.
+      :ok = Yamux.Stream.send_data(stream, "trigger")
+
+      assert_receive {:DOWN, ^server_ref, :process, ^server, :normal}, 1000
+      assert_receive {:DOWN, ^client_ref, :process, ^client, :normal}, 1000
+    end
+
+    # The external Session.go_away/2 cast API still works for callers outside
+    # a handler callback (e.g. an admin process kicking a session).
+    test "Session.go_away/2 cast also stops both sessions" do
+      {client, server} = setup_pair()
+
+      client_ref = Process.monitor(client)
+      server_ref = Process.monitor(server)
+
+      :ok = Session.go_away(server, :internal_error)
+
+      assert_receive {:DOWN, ^server_ref, :process, ^server, :normal}, 1000
+      assert_receive {:DOWN, ^client_ref, :process, ^client, :normal}, 1000
     end
   end
 
