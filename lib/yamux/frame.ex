@@ -77,7 +77,7 @@ defmodule Yamux.Frame do
   @data 0x0
   @window_update 0x1
   @ping 0x2
-  # @go_away 0x3
+  @go_away 0x3
 
   # Flags
   @syn 0x1
@@ -258,6 +258,26 @@ defmodule Yamux.Frame do
       stream_id: stream_id,
       body: <<>>,
       length: 0,
+      version: 0
+    }
+  end
+
+  @doc """
+  Creates a GoAway frame asking the peer to terminate the session. The error
+  code travels in the length field per the yamux spec:
+
+  * `0` — normal termination
+  * `1` — protocol error
+  * `2` — internal error
+  """
+  @spec go_away(0..2) :: Frame.t()
+  def go_away(code \\ 0) when code in 0..2 do
+    %Frame{
+      type: @go_away,
+      flags: 0x0,
+      stream_id: 0,
+      body: <<>>,
+      length: code,
       version: 0
     }
   end
