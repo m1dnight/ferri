@@ -125,42 +125,24 @@
       <h2>Changelog.</h2>
 
       <div class="ferri-releases">
-        <div class="ferri-release latest">
-          <span class="v">v0.1.5</span>
-          <span class="d">2026 · Apr</span>
-          <span class="desc">Dashboard, robustness</span>
-          <span class="tag">latest</span>
-        </div>
-        <div class="ferri-release latest">
-          <span class="v">v0.1.4</span>
-          <span class="d">2026 · Apr</span>
-          <span class="desc">TUI polish, install script, updated logos.</span>
-          <span class="tag">latest</span>
-        </div>
-        <div class="ferri-release">
-          <span class="v">v0.1.3</span>
-          <span class="d">2026 · Mar</span>
-          <span class="desc">Random human-readable subdomains and routing fixes.</span>
-          <span class="tag">stable</span>
-        </div>
-        <div class="ferri-release">
-          <span class="v">v0.1.2</span>
-          <span class="d">2026 · Feb</span>
-          <span class="desc">Credo cleanup, server release builds, CI polish.</span>
-          <span class="tag">stable</span>
-        </div>
-        <div class="ferri-release">
-          <span class="v">v0.1.1</span>
-          <span class="d">2026 · Jan</span>
-          <span class="desc">First binary release of the Rust client.</span>
-          <span class="tag">stable</span>
-        </div>
-        <div class="ferri-release">
-          <span class="v">v0.1.0</span>
-          <span class="d">2025 · Dec</span>
-          <span class="desc">Initial public cut. Yamux session, HTTP listener, registry.</span>
-          <span class="tag">initial</span>
-        </div>
+        <%= for entry <- FerriWeb.Changelog.entries() do %>
+          <div class={"ferri-release-block" <> if(entry.version == @version, do: " latest", else: "")}>
+            <div class="ferri-release-head">
+              <span class="v">v{entry.version}</span>
+              <span class="d">{entry.date}</span>
+              <%= if entry.version == @version do %>
+                <span class="tag">latest</span>
+              <% end %>
+            </div>
+            <%= if entry.bullets != [] do %>
+              <ul class="ferri-release-notes">
+                <%= for b <- entry.bullets do %>
+                  <li>{b}</li>
+                <% end %>
+              </ul>
+            <% end %>
+          </div>
+        <% end %>
       </div>
     </section>
   </div>
