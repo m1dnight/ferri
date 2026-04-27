@@ -8,22 +8,23 @@ defmodule Ferri.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      Ferri.Tunnel.Registry,
       FerriWeb.Telemetry,
       # Ferri.Repo,
       {DNSCluster, query: Application.get_env(:ferri, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Ferri.PubSub},
-      Ferri.Tunnel.Registry,
-      # listens for ferri client connections
-      {Ferri.Tunnel.Listener, port: Application.get_env(:ferri, :tcp_port)},
-      # listens for proxied requests to clients
-      {Ferri.Tunnel.HttpListener, port: Application.get_env(:ferri, :http_port)},
-      # # Start to serve requests, typically the last entry
+      # one_for_one supervisor for the two tunnel listeners — a crash in one
+      # listener won't take the other down.
+      {Ferri.SessionSupervisor,
+       tcp_port: Application.get_env(:ferri, :tcp_port),
+       http_port: Application.get_env(:ferri, :http_port)},
+      # Start to serve requests, typically the last entry
       FerriWeb.Endpoint
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
-    opts = [strategy: :one_for_one, name: Ferri.Supervisor]
+    opts = [strategy: :rest_for_one, name: Ferri.Supervisor]
     Supervisor.start_link(children, opts)
   end
 
