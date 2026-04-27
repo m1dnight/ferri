@@ -625,6 +625,65 @@
   border-color: var(--orange);
 }
 
+/* Per-release block (rendered from .changelogs/) */
+.ferri-release-block {
+  padding: 26px 0;
+  border-top: 1px solid var(--rule);
+}
+.ferri-release-block:last-child { border-bottom: 1px solid var(--rule); }
+
+.ferri-release-head {
+  display: flex;
+  align-items: baseline;
+  gap: 24px;
+  margin-bottom: 14px;
+}
+.ferri-release-head .v {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 28px;
+  color: var(--ink);
+}
+.ferri-release-head .d {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.ferri-release-head .tag {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--orange);
+  border: 1px solid var(--orange);
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.ferri-release-notes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-width: 70ch;
+}
+.ferri-release-notes li {
+  position: relative;
+  padding-left: 18px;
+  margin: 6px 0;
+  font-size: 15.5px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+.ferri-release-notes li::before {
+  content: "—";
+  position: absolute;
+  left: 0;
+  color: var(--ink-faint);
+}
+
 /* — why — */
 .ferri-why {
   display: grid;

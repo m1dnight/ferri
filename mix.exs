@@ -75,7 +75,7 @@ defmodule Ferri.MixProject do
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:horsestaplebattery, "~> 0.1.1"},
-       {:unclog, git: "https://github.com/m1dnight/unclog"}
+      {:unclog, git: "https://github.com/m1dnight/unclog"}
     ]
   end
 
