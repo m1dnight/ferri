@@ -18,6 +18,22 @@ Changelogs for Ferri.
 
 
 
+## 0.1.7
+
+Friday, May 01, 2026
+
+### Features
+
+ - Add Windows CI build
+
+### Bug fixes
+
+
+
+### Breaking changes
+
+
+
 ## 0.1.6
 
 Monday, April 27, 2026
