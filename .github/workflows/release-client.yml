@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - windows-ci
   workflow_dispatch:
 
 permissions:
@@ -26,6 +28,8 @@ jobs:
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             cross: true
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -46,6 +50,7 @@ jobs:
           tool: cross
 
       - name: Build
+        shell: bash
         working-directory: ferri-client/ferri
         run: |
           if [ "${{ matrix.cross }}" = "true" ]; then
@@ -55,13 +60,20 @@ jobs:
           fi
 
       - name: Package
+        shell: bash
         working-directory: ferri-client/ferri
         run: |
           mkdir -p dist
-          BIN=target/${{ matrix.target }}/release/ferri
           NAME=ferri-${GITHUB_REF_NAME}-${{ matrix.target }}
-          tar czf dist/${NAME}.tar.gz -C $(dirname $BIN) $(basename $BIN)
-          (cd dist && shasum -a 256 ${NAME}.tar.gz > ${NAME}.tar.gz.sha256)
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            BIN=target/${{ matrix.target }}/release/ferri.exe
+            7z a -tzip dist/${NAME}.zip ./${BIN}
+            (cd dist && sha256sum ${NAME}.zip > ${NAME}.zip.sha256)
+          else
+            BIN=target/${{ matrix.target }}/release/ferri
+            tar czf dist/${NAME}.tar.gz -C $(dirname $BIN) $(basename $BIN)
+            (cd dist && shasum -a 256 ${NAME}.tar.gz > ${NAME}.tar.gz.sha256)
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
@@ -70,6 +82,7 @@ jobs:
 
   release:
     needs: build
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
