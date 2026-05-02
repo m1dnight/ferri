@@ -3,9 +3,9 @@ name: release-docker
 on:
   push:
     branches:
-      - '**'
+      - "**"
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
 
 permissions:
@@ -13,8 +13,12 @@ permissions:
   packages: write
 
 jobs:
+  verify:
+    uses: ./.github/workflows/elixir-ci.yml
+
   build:
     name: build & push docker image
+    needs: verify
     runs-on: ubuntu-latest
 
     steps:

@@ -2,9 +2,10 @@ name: elixir-ci
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
+  workflow_call:
 
 permissions:
   contents: read
@@ -16,8 +17,8 @@ jobs:
 
     env:
       MIX_ENV: test
-      ELIXIR_VERSION: '1.18.4'
-      OTP_VERSION: '27.3'
+      ELIXIR_VERSION: "1.18.4"
+      OTP_VERSION: "27.3"
 
     steps:
       - uses: actions/checkout@v4
@@ -34,7 +35,8 @@ jobs:
           path: |
             deps
             _build
-          key: mix-${{ runner.os }}-otp-${{ steps.beam.outputs.otp-version }}-elixir-${{ steps.beam.outputs.elixir-version }}-${{ hashFiles('**/mix.lock') }}
+          key: mix-${{ runner.os }}-otp-${{ steps.beam.outputs.otp-version }}-elixir-${{
+            steps.beam.outputs.elixir-version }}-${{ hashFiles('**/mix.lock') }}
           restore-keys: |
             mix-${{ runner.os }}-otp-${{ steps.beam.outputs.otp-version }}-elixir-${{ steps.beam.outputs.elixir-version }}-
 
