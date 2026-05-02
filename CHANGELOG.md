@@ -18,6 +18,23 @@ Changelogs for Ferri.
 
 
 
+## 0.1.8
+
+
+
+### Features
+
+ - Build Docker packages
+ - `just release` to automate creating a new release
+
+### Bug fixes
+
+
+
+### Breaking changes
+
+
+
 ## 0.1.7
 
 Friday, May 01, 2026
