@@ -1,1 +1,2 @@
  - Build Docker packages
+ - `just release` to automate creating a new release
