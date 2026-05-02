@@ -1,0 +1,13 @@
+services:
+  ferri:
+    image: ferri:latest
+    container_name: ferri
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      # change this value (e.g., mix phx.gen.secret) for production
+      SECRET_KEY_BASE: "scgKiiHWhuEi1M/PGx9BiM28i5ESg65S2Iq3uX2vVSSqPk8KsZGVv3lLM+zVNLEC"
+      PHX_SERVER: "true"
+      PHX_HOST: "ferri.example.com"
+      PORT: "4000"
