@@ -24,8 +24,7 @@ Changelogs for Ferri.
 
 ### Features
 
- - Build Docker packages
- - `just release` to automate creating a new release
+
 
 ### Bug fixes
 
