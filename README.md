@@ -111,6 +111,18 @@ your VPS into `/opt/`.
 
 You can fetch any release from the release page [here](https://github.com/m1dnight/ferri/releases). Copy the extracted output to `/opt/` like below.
 
+### Environment variables
+
+Ferri reads the following environment variables at boot. These apply to any production release (SystemD, Docker, or directly invoking `bin/ferri start`).
+
+| Variable            | Description                                                    | Optional | Default / Example                        |
+|---------------------|----------------------------------------------------------------|----------|------------------------------------------|
+| `SECRET_KEY_BASE`   | Secret used to sign and encrypt cookies and session data       | No       | 64-char string from `mix phx.gen.secret` |
+| `PHX_SERVER`        | Set to any non-empty value to actually start the HTTP endpoint | Yes      | unset — server does not start            |
+| `PHX_HOST`          | Public hostname used for URL generation                        | Yes      | `example.com`                            |
+| `PORT`              | HTTP port the endpoint binds to                                | Yes      | `4000`                                   |
+| `DNS_CLUSTER_QUERY` | DNS query string for libcluster DNS-based node discovery       | Yes      | unset — no clustering                    |
+
 ### SystemD
 
 Then create `/etc/ferri/env`
@@ -159,6 +171,28 @@ Start the service
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now ferri
+```
+
+### Docker Compose
+
+If you'd rather run Ferri in a container, here's a minimal `docker-compose.yml`. Note that the bundled `Dockerfile.release` is build-only (its final stage is `FROM scratch`) — you'll need to wrap the release in a runnable image (Debian slim with `libstdc++6 openssl libncurses6 ca-certificates`) before referencing it here.
+
+```yaml
+services:
+  ferri:
+    image: ferri:latest
+    container_name: ferri
+    restart: unless-stopped
+    ports:
+      - "4000:4000"     # Phoenix endpoint (PORT)
+      - "8080:8080"     # public HTTP listener (Caddy proxies here)
+      - "59595:59595"   # tunnel listener (ferri client connects here)
+    environment:
+      SECRET_KEY_BASE: "REPLACE_ME_with_64_chars_from_mix_phx.gen.secret"
+      PHX_SERVER: "true"
+      PHX_HOST: "ferri.example.com"
+      PORT: "4000"
+      # DNS_CLUSTER_QUERY: "ferri.internal"   # uncomment to enable clustering
 ```
 
 ### Caddy
