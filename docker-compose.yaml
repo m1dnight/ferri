@@ -1,6 +1,6 @@
 services:
   ferri:
-    image: ferri:latest
+    image: ghcr.io/m1dnight/ferri:latest
     container_name: ferri
     restart: unless-stopped
     ports:
