@@ -2,10 +2,10 @@ mod protocol;
 mod proxy;
 mod tui;
 
-use std::env;
 use std::future::poll_fn;
 
 use anyhow::Context;
+use clap::Parser;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
@@ -16,16 +16,49 @@ use protocol::{ClientMessage, ServerMessage};
 use proxy::proxy_stream;
 use tui::LogSink;
 
+/// Parsed command-line arguments for the Ferri client.
+#[derive(Parser)]
+#[command(name = "ferri", about = "Ferri tunnel client")]
+struct FerriArgs {
+    /// Local TCP port to forward incoming tunnel traffic to.
+    #[arg(value_parser = clap::value_parser!(u16).range(1..))]
+    port: u16,
+    /// Address (host:port) of the Ferri server to connect to.
+    #[arg(
+        long = "remote",
+        default_value = "ferri.run:59595",
+        value_parser = parse_remote_host,
+    )]
+    remote_host: String,
+}
+
+/// Validate `--remote` is `host:port` with a non-empty host and a port in 1..=65535.
+fn parse_remote_host(s: &str) -> Result<String, String> {
+    let (host, port) = s
+        .rsplit_once(':')
+        .ok_or_else(|| format!("`{s}` must be in host:port form"))?;
+    if host.is_empty() {
+        return Err(format!("`{s}` is missing a host"));
+    }
+    let port: u16 = port
+        .parse()
+        .map_err(|_| format!("`{port}` is not a valid port"))?;
+    if port == 0 {
+        return Err("port must be 1-65535".into());
+    }
+    Ok(s.to_string())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let port = parse_args();
+    let FerriArgs { port, remote_host } = FerriArgs::parse();
 
     // Channel: everything that wants to print does so by sending a String here;
     // the TUI drains it into the on-screen log buffer.
     let (log_tx, log_rx) = mpsc::unbounded_channel::<String>();
 
     // Connect to the Ferri server and create a yamux session over it.
-    let stream = TcpStream::connect(ferri_endpoint()).await?;
+    let stream = TcpStream::connect(&remote_host).await?;
     let mut yamux_session = Connection::new(stream.compat(), Config::default(), Mode::Client);
 
     // Open the control stream (stream 1).
@@ -80,27 +113,5 @@ async fn register(mut control_stream: Compat<Stream>) -> anyhow::Result<String> 
     match response {
         ServerMessage::Error { reason } => Err(anyhow::anyhow!("registration failed: {reason}")),
         ServerMessage::Registered { url, .. } => Ok(url),
-    }
-}
-
-/// Parse the CLI arguments. Exits with code 2 on misuse.
-fn parse_args() -> u16 {
-    let Some(raw) = env::args().nth(1) else {
-        eprintln!("usage: ferri <port>");
-        std::process::exit(2);
-    };
-    raw.parse().unwrap_or_else(|_| {
-        eprintln!("usage: ferri <port>  (port must be 1-65535)");
-        std::process::exit(2);
-    })
-}
-
-/// Generates the Ferri endpoint. If the binary is not run in release mode it
-/// will use a local instance of ferri instead of the hosted version.
-fn ferri_endpoint() -> &'static str {
-    if cfg!(debug_assertions) {
-        "localhost:59595"
-    } else {
-        "ferri.run:59595"
     }
 }
