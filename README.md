@@ -6,6 +6,13 @@ Ferri tunnels HTTP traffic from your localhost through a free SSL-terminating en
 
 To get started, install the client and use the [hosted Ferri](https://ferri.run) for free
 
+## How It Works
+
+Ferri runs a server online, and a local Ferri client pipes web requests through
+the server, to your client, and then to your local HTTP server. This is useful
+for example, for testing webhooks, or showing a webapp on your machine to
+somebody over the internet. The tunnels are not meant to be used for production
+scenarios, but rather only for development purposes.
 
 ```mermaid
 architecture-beta
@@ -24,50 +31,11 @@ architecture-beta
     ferri:R <--> L:browser
 ```
 
-## Using Ferri
-
-To run Ferri you can run the `ferri` client locally and point it to a
-web-application running on `localhost`. Assuming you have a webapp running at
-`localhost:4444` this will give you a public-facing URL.
-
-You can install the client using the following command. Check the source of the script [here](https://raw.githubusercontent.com/m1dnight/ferri/refs/heads/main/scripts/install.sh).
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/m1dnight/ferri/refs/heads/main/scripts/install.sh | sh
-```
-
-Then run Ferri and point it to a local HTTP port.
-
-```shell
-ferri 4444
-```
-
-![Screenshot of the Ferri terminal client running.](priv/static/images/ferri-terminal.png)
 ## Features
 
  - SSL termination at the Ferri host
  - Random human-readdable URLs
  - Single-binary local client
-
-## Run Locally
-
-You can run Ferri locally fairly easily by cloning this repo and then doing the following.
-
-```shell
-# Start the backend
-iex -S mix phx.server
-```
-
-```shell
-cd ferri-client/ferri
-cargo run <local port>
-```
-
-Note: on macOS any subdomain to `localhost` resolves to `localhost` so when
-Ferri returns `http://foo.localhost:8080` it will resolve to localhost. I have
-not tested or tried this on Linux.
-
-
 
 ## Why?
 
@@ -80,6 +48,59 @@ by Andrea Leopardi. I personally like using ngrok, and it works perfectly fine.
 I find it an interesting piece of software and wondered how it all worked
 exactly.
 
+## Installing Ferri
+
+You can install the client using the following command. Check the source of the
+script
+[here](https://raw.githubusercontent.com/m1dnight/ferri/refs/heads/main/scripts/install.sh).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/m1dnight/ferri/refs/heads/main/scripts/install.sh | sh
+```
+
+Or, if you wish you can compile it from source from this repo.
+
+## Using Ferri
+
+To run Ferri you can run the `ferri` client locally and point it to a web
+application running on `localhost`. Assuming you have a webapp running at
+`localhost:4444` this will give you a public-facing URL that connects to that
+webapp.
+
+
+```shell
+ferri 4444
+```
+
+If you are hosting your own Ferri server, you can specify the endpoint, it
+defaults to `ferri.run:59595`.
+
+```shell
+ferri 4444 --remote myferri.com:59595
+```
+
+![Screenshot of the Ferri terminal client running.](priv/static/images/ferri-terminal.png)
+
+
+
+## Run a Ferri Development Server
+
+You can run Ferri locally by cloning this repo and then doing the following.
+
+```shell
+# Start the backend
+iex -S mix phx.server
+```
+
+Connecting to your local instance using Cargo is done as follows.
+
+```shell
+cargo run --manifest-path ferri-client/ferri/Cargo.toml -- 4444 --remote localhost:59595
+```
+
+Note: on macOS any subdomain to `localhost` resolves to `localhost` so when
+Ferri returns `http://foo.localhost:8080` it will resolve to localhost. I have
+not tested or tried this on Linux.
 
 ## Self-hosting
 
@@ -96,24 +117,14 @@ To run Ferri on a VPS, you need to install Caddy and Ferri as a SystemD service.
 
 ### Ferri
 
-#### From Source
-Create a release on a machine with the same architecture are your VPS. I.e., you
-cannot build this on  Apple Silicon and deploy on an x86 VM.
-
-```bash
-just release
-```
-
-This will produce the release under `_build/prod/rel`. Copy these files onto
-your VPS into `/opt/`.
-
-#### From GitHub
-
-You can fetch any release from the release page [here](https://github.com/m1dnight/ferri/releases). Copy the extracted output to `/opt/` like below.
+You can fetch any release from the release page
+[here](https://github.com/m1dnight/ferri/releases). Copy the extracted output to
+`/opt/` like below.
 
 ### Environment variables
 
-Ferri reads the following environment variables at boot. These apply to any production release (SystemD, Docker, or directly invoking `bin/ferri start`).
+Ferri reads the following environment variables at boot. These apply to any
+production release (SystemD, Docker, or directly invoking `bin/ferri start`).
 
 | Variable                    | Description                                                                                | Optional | Default / Example                        |
 |-----------------------------|--------------------------------------------------------------------------------------------|----------|------------------------------------------|
@@ -173,28 +184,6 @@ Start the service
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now ferri
-```
-
-### Docker Compose
-
-If you'd rather run Ferri in a container, here's a minimal `docker-compose.yml`. Note that the bundled `Dockerfile.release` is build-only (its final stage is `FROM scratch`) — you'll need to wrap the release in a runnable image (Debian slim with `libstdc++6 openssl libncurses6 ca-certificates`) before referencing it here.
-
-```yaml
-services:
-  ferri:
-    image: ferri:latest
-    container_name: ferri
-    restart: unless-stopped
-    ports:
-      - "4000:4000"     # Phoenix endpoint (PORT)
-      - "8080:8080"     # public HTTP listener (Caddy proxies here)
-      - "59595:59595"   # tunnel listener (ferri client connects here)
-    environment:
-      SECRET_KEY_BASE: "REPLACE_ME_with_64_chars_from_mix_phx.gen.secret"
-      PHX_SERVER: "true"
-      PHX_HOST: "ferri.example.com"
-      PORT: "4000"
-      # DNS_CLUSTER_QUERY: "ferri.internal"   # uncomment to enable clustering
 ```
 
 ### Caddy
