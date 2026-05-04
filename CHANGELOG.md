@@ -18,6 +18,27 @@ Changelogs for Ferri.
 
 
 
+## 0.1.9
+
+
+
+### Features
+
+ - Added `--remote <host>:<port>` commandline argument to Ferri client.
+ - Rate limit the throughput per session
+
+### Bug fixes
+
+- When a client disconnected from the server, the stream was not fully closed,
+  only half (FIN). Now a RST frame is sent such that the stream is closed
+  entirely and stops receiving.
+ - Cleanup the readme file.
+
+
+### Breaking changes
+
+
+
 ## 0.1.8
 
 
