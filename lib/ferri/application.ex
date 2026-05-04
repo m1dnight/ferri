@@ -19,7 +19,9 @@ defmodule Ferri.Application do
       # listener won't take the other down.
       {Ferri.SessionSupervisor,
        tcp_port: Application.get_env(:ferri, :tcp_port),
-       http_port: Application.get_env(:ferri, :http_port)},
+       http_port: Application.get_env(:ferri, :http_port),
+       tunnel_rate_bps: Application.get_env(:ferri, :tunnel_rate_bps, :infinity),
+       tunnel_burst_bytes: Application.get_env(:ferri, :tunnel_burst_bytes, 0)},
       # Start to serve requests, typically the last entry
       FerriWeb.Endpoint
     ]

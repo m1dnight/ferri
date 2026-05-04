@@ -11,7 +11,13 @@ config :ferri,
   ecto_repos: [Ferri.Repo],
   generators: [timestamp_type: :utc_datetime],
   tcp_port: 59595,
-  http_port: 8080
+  http_port: 8080,
+  # Per-session rate limit on data flowing Ferri -> visitors. This caps the
+  # total throughput a client can send to all visitors combined. holds up to
+  # `tunnel_burst_bytes` and refills at `tunnel_rate_bps` bytes/sec. Default is
+  # 1 MB/s sustained with a 1 MB burst.
+  tunnel_rate_bps: 1_048_576,
+  tunnel_burst_bytes: 1_048_576
 
 # Configure the endpoint
 config :ferri, FerriWeb.Endpoint,

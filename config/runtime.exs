@@ -27,6 +27,17 @@ host = System.get_env("PHX_HOST") || "localhost"
 config :ferri,
   public_host: host
 
+# Per-session rate limit on data flowing from the tunnel client to visitors.
+# Both env vars are optional; when unset, the compile-time defaults from
+# config/config.exs apply (1 MB/s sustained, 1 MB burst).
+if rate = System.get_env("TUNNEL_RATE_BYTES_PER_SEC") do
+  config :ferri, tunnel_rate_bps: String.to_integer(rate)
+end
+
+if burst = System.get_env("TUNNEL_BURST_BYTES") do
+  config :ferri, tunnel_burst_bytes: String.to_integer(burst)
+end
+
 if config_env() == :prod do
   # database_url =
   #   System.get_env("DATABASE_URL") ||

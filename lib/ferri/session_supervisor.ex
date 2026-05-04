@@ -20,9 +20,11 @@ defmodule Ferri.SessionSupervisor do
   def init(opts) do
     tcp_port = Keyword.fetch!(opts, :tcp_port)
     http_port = Keyword.fetch!(opts, :http_port)
+    rate_bps = Keyword.get(opts, :tunnel_rate_bps, :infinity)
+    burst_bytes = Keyword.get(opts, :tunnel_burst_bytes, 0)
 
     children = [
-      {Ferri.Tunnel.Listener, port: tcp_port},
+      {Ferri.Tunnel.Listener, port: tcp_port, rate_bps: rate_bps, burst_bytes: burst_bytes},
       {Ferri.Tunnel.HttpListener, port: http_port}
     ]
 

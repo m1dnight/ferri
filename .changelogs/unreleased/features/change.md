@@ -1,1 +1,2 @@
  - Added `--remote <host>:<port>` commandline argument to Ferri client.
+ - Rate limit the throughput per session
