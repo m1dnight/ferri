@@ -160,7 +160,10 @@ defmodule Yamux.Session do
   def handle_call(:open_stream, _from, state) do
     id = state.next_stream_id
     {:ok, stream_pid} = Stream.start_link(self(), id)
-    :ok = :gen_tcp.send(state.socket, Frame.encode(Frame.syn(id)))
+    # send the syn frame. if the send fails due to a closed socket
+    # it will be handled by the tcp_closed message after this. ignore the
+    # fail.
+    _ = :gen_tcp.send(state.socket, Frame.encode(Frame.syn(id)))
 
     state = %{
       state
@@ -173,8 +176,18 @@ defmodule Yamux.Session do
 
   @impl true
   def handle_cast({:send_raw, bytes}, state) do
-    :ok = :gen_tcp.send(state.socket, bytes)
-    {:noreply, state}
+    case :gen_tcp.send(state.socket, bytes) do
+      :ok ->
+        {:noreply, state}
+
+      # The peer has already gone away, but we have not handled the tcp closed
+      # message yet. Disconnect now to avoid a crash later.
+      {:error, reason} ->
+        Logger.debug("send_raw failed (#{inspect(reason)}); stopping session")
+        notify_streams(state, :session_closed)
+        invoke_terminate(state, :tcp_closed)
+        {:stop, :normal, state}
+    end
   end
 
   def handle_cast({:go_away, reason}, state) do
@@ -240,9 +253,11 @@ defmodule Yamux.Session do
         {:ok, pid} = Stream.start_link(self(), id)
         send(pid, {:frame, frame})
 
-        # acknowledge the new stream
+        # acknowledge the new stream. if the send fails due to a closed socket
+        # it will be handled by the tcp_closed message after this. ignore the
+        # fail.
         syn_ack = Frame.syn_ack(id)
-        :ok = :gen_tcp.send(state.socket, Frame.encode(syn_ack))
+        _ = :gen_tcp.send(state.socket, Frame.encode(syn_ack))
 
         state = %{state | streams: Map.put(state.streams, id, pid)}
 
