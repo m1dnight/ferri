@@ -174,7 +174,7 @@ defmodule Yamux.Session do
   @impl true
   def handle_cast({:send_raw, bytes}, state) do
     :ok = :gen_tcp.send(state.socket, bytes)
-        {:noreply, state}
+    {:noreply, state}
   end
 
   def handle_cast({:go_away, reason}, state) do
