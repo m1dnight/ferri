@@ -25,6 +25,16 @@ defmodule Yamux.Session do
     # Handler behaviour module and its opaque state
     field :handler, module() | nil, default: nil
     field :handler_state, term(), default: nil
+    # Inbound rate limit (token bucket). `:infinity` disables limiting entirely;
+    # otherwise we hold up to `burst_bytes` tokens, refilled at `rate_bps`
+    # bytes/sec. After each TCP read we spend `byte_size(data)` tokens; when
+    # the bucket runs dry we delay the next `:active, :once` re-arm by enough
+    # milliseconds for the bucket to recover, which back-pressures the peer
+    # via TCP's receive window.
+    field :rate_bps, non_neg_integer() | :infinity, default: :infinity
+    field :burst_bytes, non_neg_integer(), default: 0
+    field :tokens, integer(), default: 0
+    field :last_refill_at, integer(), default: 0
   end
 
   @doc """
@@ -76,13 +86,20 @@ defmodule Yamux.Session do
         hs
       end
 
+    rate_bps = Keyword.get(opts, :rate_bps, :infinity)
+    burst_bytes = Keyword.get(opts, :burst_bytes, 0)
+
     {:ok,
      %Session{
        socket: socket,
        mode: mode,
        next_stream_id: next_id,
        handler: handler,
-       handler_state: handler_state
+       handler_state: handler_state,
+       rate_bps: rate_bps,
+       burst_bytes: burst_bytes,
+       tokens: burst_bytes,
+       last_refill_at: System.monotonic_time(:millisecond)
      }}
   end
 
@@ -95,10 +112,9 @@ defmodule Yamux.Session do
 
   # raw bytes coming in over the TCP socket
   def handle_info({:tcp, socket, data}, %{socket: socket} = state) do
-    # Re-arm active mode for next data message. By setting it to once we only
-    # receive 1 data message. To receive the next one we have to set it to once
-    # again.
-    :ok = :inet.setopts(socket, active: :once)
+    # Reduce the the rate limiter with the bytes we just received. If the buffer
+    # is spent, wait a bit for reading more from the socket.
+    state = schedule_rearm(state, byte_size(data))
 
     # append the data message to the buffer and then try and drain it.
     state = %{state | buffer: state.buffer <> data}
@@ -132,6 +148,14 @@ defmodule Yamux.Session do
     {:stop, :normal, state}
   end
 
+  # Rate-limit refill timer fired.  Ask the socket for the next chunk. If the
+  # socket has since closed, the resulting setopts error is harmless and
+  # ignored.
+  def handle_info(:rearm, state) do
+    _ = :inet.setopts(state.socket, active: :once)
+    {:noreply, state}
+  end
+
   @impl true
   def handle_call(:open_stream, _from, state) do
     id = state.next_stream_id
@@ -150,7 +174,7 @@ defmodule Yamux.Session do
   @impl true
   def handle_cast({:send_raw, bytes}, state) do
     :ok = :gen_tcp.send(state.socket, bytes)
-    {:noreply, state}
+        {:noreply, state}
   end
 
   def handle_cast({:go_away, reason}, state) do
@@ -314,4 +338,51 @@ defmodule Yamux.Session do
   defp go_away_code(:normal), do: 0
   defp go_away_code(:protocol_error), do: 1
   defp go_away_code(:internal_error), do: 2
+
+  # call the next `:active, :once` read based on the token bucket. Returns the
+  # updated session state.
+  @spec schedule_rearm(Session.t(), non_neg_integer()) :: Session.t()
+  defp schedule_rearm(%Session{rate_bps: :infinity} = state, _bytes) do
+    :ok = :inet.setopts(state.socket, active: :once)
+    state
+  end
+
+  defp schedule_rearm(%Session{rate_bps: rate, burst_bytes: burst} = state, bytes)
+       when is_integer(rate) and rate > 0 do
+    now = System.monotonic_time(:millisecond)
+    # time since last refill
+    elapsed = max(now - state.last_refill_at, 0)
+    # how many bytes could have been transferred since the last refill
+    gained = div(elapsed * rate, 1000)
+
+    tokens =
+      state.tokens
+      # add the total amount of bytes connection can transfer
+      |> Kernel.+(gained)
+      # the total tokens is either the total buffer, or the burst size. the
+      # minimum of both.
+      |> min(burst)
+      # subtract the bytes transferred
+      |> Kernel.-(bytes)
+
+    state = %{state | tokens: tokens, last_refill_at: now}
+
+    # if there are tokens left, fetch the next batch of bytes from the socket,
+    # otherwise schedule a rearm. If the tokens are negative, the connection
+    # overspent, so the rearm takes a bit longer.
+    if tokens >= 0 do
+      :ok = :inet.setopts(state.socket, active: :once)
+      state
+    else
+      # if the token count is negative, there is a debt. e.g., if the tokens are
+      # -2500, the connection spent 2500 tokens for the next interval. If the
+      # rate is, say, 1000 bps, that means the next batch of bytes can only be
+      # sent in 2,5 seconds.
+      token_debt = -tokens
+      # the time in milliseconds it would take to spend these tokens at the rate limit
+      time_to_consume_ms = token_debt / rate * 1000
+      Process.send_after(self(), :rearm, ceil(time_to_consume_ms))
+      state
+    end
+  end
 end

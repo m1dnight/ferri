@@ -243,4 +243,69 @@ defmodule Yamux.SessionTest do
       assert_receive {:DOWN, ^ref, :process, ^server, :normal}, 1000
     end
   end
+
+  describe "rate limiting" do
+    # By default no rate limit is configured, so the bucket fields stay at
+    # their disabled values regardless of how much data flows through.
+    test "is disabled by default" do
+      {client, server} = setup_pair()
+
+      assert get_state(server).rate_bps == :infinity
+
+      send_frame(client, Frame.data(1, String.duplicate("x", 1_000)))
+      Process.sleep(50)
+
+      state = get_state(server)
+      assert state.rate_bps == :infinity
+      # tokens never get touched on the :infinity path
+      assert state.tokens == 0
+    end
+
+    # Within the burst budget the bucket simply spends tokens for each byte
+    # received, never going negative.
+    test "spends tokens for received bytes when within burst" do
+      # Big bucket so a single small frame stays within budget.
+      {client, server} = setup_pair(rate_bps: 1_000_000, burst_bytes: 1_000_000)
+
+      assert get_state(server).tokens == 1_000_000
+
+      payload = String.duplicate("x", 200)
+      send_frame(client, Frame.data(1, payload))
+      Process.sleep(50)
+
+      state = get_state(server)
+      assert state.tokens >= 0
+      # We sent a data frame: 12-byte header + 200-byte body = 212 bytes. Some
+      # tokens will have been refilled during the sleep, but the bucket can't
+      # exceed `burst`, so we should still be measurably below it.
+      assert state.tokens < 1_000_000
+    end
+
+    # When the inbound chunk exceeds the bucket the bookkeeping goes negative
+    # and the next `:active, :once` re-arm is deferred. After the refill delay
+    # the deferred `:rearm` fires and the session keeps making progress —
+    # follow-up traffic still drains.
+    test "goes negative on burst overflow and re-arms after the refill delay" do
+      # Tiny bucket, slow refill — easy to overflow.
+      {client, server} = setup_pair(rate_bps: 1_000, burst_bytes: 100)
+
+      # Send well over the burst in one shot.
+      send_frame(client, Frame.data(1, String.duplicate("x", 1_000)))
+      Process.sleep(50)
+
+      assert get_state(server).tokens < 0,
+             "bucket should be in debt after a burst overflow"
+
+      # After enough time for the bucket to refill, the deferred `:rearm` will
+      # have fired and the socket is armed again. A second frame should drain
+      # cleanly, proving the session is still consuming bytes.
+      Process.sleep(2_000)
+
+      assert Process.alive?(server)
+      send_frame(client, Frame.data(1, "ping"))
+      Process.sleep(50)
+
+      assert get_state(server).buffer == <<>>
+    end
+  end
 end

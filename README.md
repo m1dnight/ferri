@@ -115,13 +115,15 @@ You can fetch any release from the release page [here](https://github.com/m1dnig
 
 Ferri reads the following environment variables at boot. These apply to any production release (SystemD, Docker, or directly invoking `bin/ferri start`).
 
-| Variable            | Description                                                    | Optional | Default / Example                        |
-|---------------------|----------------------------------------------------------------|----------|------------------------------------------|
-| `SECRET_KEY_BASE`   | Secret used to sign and encrypt cookies and session data       | No       | 64-char string from `mix phx.gen.secret` |
-| `PHX_SERVER`        | Set to any non-empty value to actually start the HTTP endpoint | Yes      | unset — server does not start            |
-| `PHX_HOST`          | Public hostname used for URL generation                        | Yes      | `example.com`                            |
-| `PORT`              | HTTP port the endpoint binds to                                | Yes      | `4000`                                   |
-| `DNS_CLUSTER_QUERY` | DNS query string for libcluster DNS-based node discovery       | Yes      | unset — no clustering                    |
+| Variable                    | Description                                                                                | Optional | Default / Example                        |
+|-----------------------------|--------------------------------------------------------------------------------------------|----------|------------------------------------------|
+| `SECRET_KEY_BASE`           | Secret used to sign and encrypt cookies and session data                                   | No       | 64-char string from `mix phx.gen.secret` |
+| `PHX_SERVER`                | Set to any non-empty value to actually start the HTTP endpoint                             | Yes      | unset — server does not start            |
+| `PHX_HOST`                  | Public hostname used for URL generation                                                    | Yes      | `example.com`                            |
+| `PORT`                      | HTTP port the endpoint binds to                                                            | Yes      | `4000`                                   |
+| `DNS_CLUSTER_QUERY`         | DNS query string for libcluster DNS-based node discovery                                   | Yes      | unset — no clustering                    |
+| `TUNNEL_RATE_BYTES_PER_SEC` | Per-session sustained rate limit (bytes/sec) on data flowing from tunnel client → visitors | Yes      | `1048576` (1 MB/s)                       |
+| `TUNNEL_BURST_BYTES`        | Per-session token-bucket burst size (bytes); short spikes up to this size bypass the rate  | Yes      | `1048576` (1 MB)                         |
 
 ### SystemD
 

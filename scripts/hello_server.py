@@ -1,9 +1,26 @@
+import base64
+import hashlib
 import json
+import os
+import secrets
+import struct
 import sys
 import threading
 import time
 from collections import deque
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+MAX_DOWNLOAD_MB = 1024
+RANDOM_CHUNK_POOL = os.urandom(1024 * 1024)
+
+
+def _random_chunk(n: int) -> bytes:
+    if n <= len(RANDOM_CHUNK_POOL):
+        start = secrets.randbelow(len(RANDOM_CHUNK_POOL) - n + 1)
+        return RANDOM_CHUNK_POOL[start:start + n]
+    return os.urandom(n)
 
 active = 0
 total_conns = 0
@@ -67,6 +84,14 @@ class Handler(BaseHTTPRequestHandler):
             self._respond(200, _status_body(), "application/json")
             return
 
+        if path == "/ws/time":
+            self._serve_ws_time()
+            return
+
+        if path.startswith("/download/"):
+            self._serve_random_download(path[len("/download/"):])
+            return
+
         route = ROUTES.get(path)
         if route is None:
             self._respond(404, b"not found\n", "text/plain")
@@ -103,6 +128,65 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(204)
         self.end_headers()
 
+    def _serve_random_download(self, raw_size):
+        try:
+            mb = int(raw_size)
+        except ValueError:
+            self._respond(400, b"size must be an integer\n", "text/plain")
+            return
+        if mb < 1 or mb > MAX_DOWNLOAD_MB:
+            self._respond(
+                400,
+                f"size must be between 1 and {MAX_DOWNLOAD_MB}\n".encode(),
+                "text/plain",
+            )
+            return
+
+        total = mb * 1024 * 1024
+        self.send_response(200)
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("Content-Length", str(total))
+        self.send_header(
+            "Content-Disposition",
+            f'attachment; filename="random-{mb}mb.bin"',
+        )
+        self.end_headers()
+
+        chunk_size = 64 * 1024
+        remaining = total
+        try:
+            while remaining > 0:
+                n = chunk_size if remaining >= chunk_size else remaining
+                self.wfile.write(_random_chunk(n))
+                remaining -= n
+        except (BrokenPipeError, ConnectionResetError):
+            return
+
+    def _serve_ws_time(self):
+        key = self.headers.get("Sec-WebSocket-Key")
+        upgrade = (self.headers.get("Upgrade") or "").lower()
+        if not key or upgrade != "websocket":
+            self._respond(400, b"bad websocket request\n", "text/plain")
+            return
+
+        accept = base64.b64encode(
+            hashlib.sha1((key + WS_GUID).encode()).digest()
+        ).decode()
+        self.send_response(101)
+        self.send_header("Upgrade", "websocket")
+        self.send_header("Connection", "Upgrade")
+        self.send_header("Sec-WebSocket-Accept", accept)
+        self.end_headers()
+
+        try:
+            while True:
+                payload = datetime.now(timezone.utc).isoformat().encode()
+                self.wfile.write(_ws_text_frame(payload))
+                self.wfile.flush()
+                time.sleep(1.0)
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            return
+
     def _count_request(self):
         global total_reqs
         with lock:
@@ -124,6 +208,18 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, format, *args):  # noqa: A002 — overrides stdlib API
         del format, args  # silence access logs
+
+
+def _ws_text_frame(payload: bytes) -> bytes:
+    header = bytes([0x81])  # FIN=1, opcode=text
+    n = len(payload)
+    if n < 126:
+        header += bytes([n])
+    elif n < 65536:
+        header += bytes([126]) + struct.pack(">H", n)
+    else:
+        header += bytes([127]) + struct.pack(">Q", n)
+    return header + payload
 
 
 def _status_body():
@@ -166,6 +262,31 @@ def render():
         time.sleep(0.1)
 
 
+PORT = 4444
+
+ENDPOINTS = [
+    ("GET",  "/",            "plain text hello"),
+    ("GET",  "/about",       "small html page"),
+    ("GET",  "/lorem",       "~22 KB lorem ipsum"),
+    ("GET",  "/download.txt", "~2.2 MB attachment"),
+    ("GET",  "/download/{mb}", f"random binary of N MB (1..{MAX_DOWNLOAD_MB})"),
+    ("GET",  "/api/status",  "json server stats"),
+    ("GET",  "/ws/time",     "websocket: utc time, 1 msg/s"),
+    ("POST", "/echo",        "echoes request body (201)"),
+    ("PUT",  "/echo",        "echoes request body (200)"),
+    ("DEL",  "/echo",        "no content (204)"),
+]
+
+
+def print_banner(port):
+    print(f"hello_server listening on http://localhost:{port}")
+    print("endpoints:")
+    for method, path, desc in ENDPOINTS:
+        print(f"  {method:<4} {path:<14}  {desc}")
+    print()
+
+
 if __name__ == "__main__":
+    print_banner(PORT)
     threading.Thread(target=render, daemon=True).start()
-    Server(("", 4444), Handler).serve_forever()
+    Server(("", PORT), Handler).serve_forever()

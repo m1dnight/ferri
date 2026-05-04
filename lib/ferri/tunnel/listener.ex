@@ -17,6 +17,8 @@ defmodule Ferri.Tunnel.Listener do
   @impl true
   def init(opts) do
     port = Keyword.fetch!(opts, :port)
+    rate_bps = Keyword.get(opts, :rate_bps, :infinity)
+    burst_bytes = Keyword.get(opts, :burst_bytes, 0)
 
     # start the socket to listen for incoming web requests
     opts = [:binary, active: false, reuseaddr: true, exit_on_close: false]
@@ -29,7 +31,7 @@ defmodule Ferri.Tunnel.Listener do
         # accept first connection
         send(self(), :accept)
 
-        {:ok, listen_socket}
+        {:ok, %{socket: listen_socket, rate_bps: rate_bps, burst_bytes: burst_bytes}}
 
       {:error, reason} ->
         {:stop, reason}
@@ -37,7 +39,7 @@ defmodule Ferri.Tunnel.Listener do
   end
 
   @impl true
-  def handle_info(:accept, listen_socket) do
+  def handle_info(:accept, %{socket: listen_socket} = state) do
     case :gen_tcp.accept(listen_socket, 2_000) do
       {:ok, socket} ->
         # grab some extra information from the socket for logging
@@ -45,19 +47,24 @@ defmodule Ferri.Tunnel.Listener do
         Logger.info("Tunnel client connected #{inspect(ip)}:#{inspect(port)}")
 
         # Start a connection process for this client's connection.
-        {:ok, _session} = Session.start_link(socket, :server, handler: Ferri.Tunnel.Handler)
+        {:ok, _session} =
+          Session.start_link(socket, :server,
+            handler: Ferri.Tunnel.Handler,
+            rate_bps: state.rate_bps,
+            burst_bytes: state.burst_bytes
+          )
 
         # Accept next connection.
         send(self(), :accept)
-        {:noreply, listen_socket}
+        {:noreply, state}
 
       {:error, :timeout} ->
         send(self(), :accept)
-        {:noreply, listen_socket}
+        {:noreply, state}
 
       # todo: gracefully handle this case with the child Session processes.
       {:error, reason} ->
-        {:stop, reason, listen_socket}
+        {:stop, reason, state}
     end
   end
 end

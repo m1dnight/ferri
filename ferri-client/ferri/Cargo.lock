@@ -164,7 +164,7 @@ dependencies = [
 
 [[package]]
 name = "ferri"
-version = "0.1.4"
+version = "0.1.8"
 dependencies = [
  "ansi-to-tui",
  "anyhow",
