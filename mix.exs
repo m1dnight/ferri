@@ -8,6 +8,7 @@ defmodule Ferri.MixProject do
       elixir: "~> 1.15",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
+      package: package(),
       aliases: aliases(),
       deps: deps(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
@@ -32,6 +33,12 @@ defmodule Ferri.MixProject do
   def cli do
     [
       preferred_envs: [precommit: :test]
+    ]
+  end
+
+  defp package do
+    [
+      licenses: ["MIT"]
     ]
   end
 
